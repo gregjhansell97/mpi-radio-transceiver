@@ -1,16 +1,33 @@
 #include "mpi_radio_transceiver.h"
 
+#include "mpi.h"
+#include <iostream>
+
+using std::cout;
+using std::endl;
+
 using hmap::interface::Communicator;
 
-MPIRadioTransceiver::MPIRadioTransceiver(
-        void* ctx,
-        const double send_duration,
-        const double recv_duration,
-        const double send_radius,
-        const double recv_radius,
-        const size_t max_buffer_size) { 
-    // TODO
+
+bool MPIRadioTransceiver::open_mpi_thread(
+        MPIRadioTransceiver* trxs,
+        const size_t trxs_size) {
+    int provided_thread_support;
+    MPI_Query_thread(&provided_thread_support);
+    if(provided_thread_support != MPI_THREAD_MULTIPLE) {
+        cout << "ERROR: need MPI_THREAD_MULTIPLE support" << endl;
+        return false; // something went wrong
+    } 
+    cout << "SPINNING MPI THREAD" << endl;
 }
+
+void MPIRadioTransceiver::close_mpi_thread() {
+    cout << "CLOSING MPI THREAD" << endl;
+}
+
+
+MPIRadioTransceiver::MPIRadioTransceiver() { }
+
 MPIRadioTransceiver::~MPIRadioTransceiver() { 
     this->close();
     // TODO
