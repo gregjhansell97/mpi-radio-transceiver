@@ -13,6 +13,7 @@ using std::cout;
 using std::endl;
 
 
+#define LOCATION_OFFSET 0.02
 #define NUM_TRXS 1
 #define MAX_BUFFER_SIZE 2048
 
@@ -20,11 +21,17 @@ int main(int argc, char** argv) {
     // Initialize MPI Environment
     int provided_thread_support;
     int ret = MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided_thread_support);
-    assert(ret == 0 && provided_thread_support == MPI_THREAD_MULTIPLE);
+    if(ret != 0 || provided_thread_support != MPI_THREAD_MULTIPLE) {
+        cout << "Unable to initialize the MPI execution environment" << endl;
+        return 1;
+    }
 
     // GRAB MPI SPECS
     int rank = 0;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if(MPI_Comm_rank(MPI_COMM_WORLD, &rank)) {
+        cout << "Unable to retrieve the current rank's ID" << endl;
+        return 1;
+    }
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
@@ -76,7 +83,7 @@ int main(int argc, char** argv) {
             // send message with size, and a timeout of 0 
             assert(t.send(msg, sizeof(i), 1) == sizeof(i));
             // shift x to another location and publish again
-            t.set_x(i + 0.02); 
+            t.set_x(i + LOCATION_OFFSET); 
         }
         // go through others and verify that they received a message
         for(int i = 1; i < NUM_TRXS; ++i) {
