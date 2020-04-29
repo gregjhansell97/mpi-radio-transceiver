@@ -18,9 +18,6 @@
 
 class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
-    MPIRadioTransceiver();
-    ~MPIRadioTransceiver();
-
     void set_x(const double x) { m_x = x; };
     void set_y(const double y) { m_y = y; };
     void set_send_duration(const double sd) { m_send_duration = sd; };
@@ -36,25 +33,6 @@ public:
     void close() override;
 
     /**
-     * Starts the mpi listener on a separate thread
-     *
-     * Args:
-     *     trxs: tranceivers that are connected accross ranks
-     *     trxs_size: number of transceivers
-     *
-     * Returns:
-     *     False if mpi threading capabilities are not provided, need
-     *      threadlevel of MPI_THREAD_MULTIPLE, and True on successful spinning
-     *      of thread 
-     */
-    static bool open_mpi_listener(
-            MPIRadioTransceiver* trxs, const size_t trxs_size);
-    /**
-     * Stops the mpi listener
-     */
-    static void close_mpi_listener();
-
-    /**
      * Called only once at the begining to obtain transceivers
      *
      * Template Args:
@@ -64,7 +42,7 @@ public:
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
         static MPIRadioTransceiver trxs[N];
-        static char buffers[N][B];
+        static char buffers[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
 
         for(int i = 0; i < N; ++i) {
             auto& t = trxs[i];
@@ -72,13 +50,21 @@ public:
             t.m_buffer_size = 0;
             t.m_buffer = buffers[i];
         }
-        std::cout << N << " ---- " << B << std::endl;
         if(!open_mpi_listener(trxs, N)) {
             // could not start listener, somethings wrong
             return nullptr;
         }
         return trxs;
     }
+    /**
+     * Closes transceivers created by the transceivers template function above
+     *
+     * Args:
+     *     trxs: array of transceivers to close
+     *     trxs_size: number of transceivers to close
+     */
+    static void close_transceivers(
+            MPIRadioTransceiver* trxs, const size_t trxs_size);
 
 
 private:
@@ -116,6 +102,30 @@ private:
     // mpi channels used
     static const int RECV_CHANNEL = 0;
     static const int CLOSE_CHANNEL = 1;
+
+    // can only create transcievers through template transceivers
+    MPIRadioTransceiver();
+
+    /**
+     * Starts the mpi listener on a separate thread
+     *
+     * Args:
+     *     trxs: tranceivers that are connected accross ranks
+     *     trxs_size: number of transceivers
+     *
+     * Returns:
+     *     False if mpi threading capabilities are not provided, need
+     *      threadlevel of MPI_THREAD_MULTIPLE, and True on successful spinning
+     *      of thread 
+     */
+    static bool open_mpi_listener(
+            MPIRadioTransceiver* trxs, const size_t trxs_size);
+    /**
+     * Stops the mpi listener
+     */
+    static void close_mpi_listener();
+
+
 };
 
 #endif // MPI_RADIO_TRANSCEIVER_H

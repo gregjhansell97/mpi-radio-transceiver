@@ -111,12 +111,7 @@ int main(int argc, char** argv) {
 
     // may need sleep if operations are not blocking and not done yet
     //std::this_thread::sleep_for(std::chrono::seconds(1));
-    //MPIRadioTransceiver::close_transceivers(transceivers);
-    MPIRadioTransceiver::close_mpi_listener();
-    for(size_t i = 0; i < NUM_TRXS; ++i) {
-        auto& t = trxs[i];
-        t.close();
-    }
+    MPIRadioTransceiver::close_transceivers(trxs, NUM_TRXS);
 
 
     MPI_Finalize();

@@ -147,6 +147,15 @@ void MPIRadioTransceiver::close_mpi_listener() {
     delete mpi_listener_thread;
     mpi_listener_thread = nullptr;
 }
+
+void MPIRadioTransceiver::close_transceivers(
+        MPIRadioTransceiver* trxs, const size_t trxs_size) {
+    MPIRadioTransceiver::close_mpi_listener();
+    for(size_t i = 0; i < trxs_size; ++i) {
+        auto& t = trxs[i];
+        t.close();
+    }
+}
     
 
 MPIRadioTransceiver::MPIRadioTransceiver() { 
@@ -159,10 +168,6 @@ MPIRadioTransceiver::MPIRadioTransceiver() {
 
 }
 
-MPIRadioTransceiver::~MPIRadioTransceiver() { 
-    this->close();
-    // TODO free an variables allocated
-}
 ssize_t MPIRadioTransceiver::send(
         char* data, const size_t size, const int timeout) {
     if(size > m_max_buffer_size) {
