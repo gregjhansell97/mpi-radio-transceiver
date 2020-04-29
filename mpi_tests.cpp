@@ -1,8 +1,12 @@
 #include "mpi.h"
+#include <assert.h>
+#include <chrono>
 #include <iostream>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
 
 #include "mpi_radio_transceiver.h"
-#include <assert.h>
 
 
 using std::cout;
@@ -15,13 +19,14 @@ using std::endl;
 int main(int argc, char** argv) {
     // Initialize MPI Environment
     int provided_thread_support;
-    MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided_thread_support);
+    int ret = MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided_thread_support);
+    assert(ret == 0 && provided_thread_support == MPI_THREAD_MULTIPLE);
 
     // GRAB MPI SPECS
-    int world_rank = 0;
-    //MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-    //int world_size;
-    //MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    int rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    int num_ranks;
+    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
     // CREATE CONTEXT: INITIAL LOCATIONS ARE ZERO
     MPIRadioTransceiver trxs[NUM_TRXS];
@@ -44,7 +49,10 @@ int main(int argc, char** argv) {
         t.set_buffer(buffers[i], MAX_BUFFER_SIZE);
     }
 
-    if(!MPIRadioTransceiver::open_mpi_thread(trxs, NUM_TRXS)) {
+    // TODO change to a factor method like
+    // MPIRadioTransceiver::transceivers<10, 1024>()
+    // This will return 10 transceivers with max-buffers of 1024
+    if(!MPIRadioTransceiver::open_mpi_listener(trxs, NUM_TRXS)) {
         // could not open mpi in a separate thread
         MPI_Finalize();
         return 1;
@@ -55,7 +63,13 @@ int main(int argc, char** argv) {
     // This Test selects moves around the first transceiver index and sees if
     // where it broadcasts changes
 
-    if(world_rank == 0) {
+    if(rank == 0) {
+        char m = 'h';
+        trxs[0].send(&m, 1, 0);
+        char* j = &m;
+        trxs[0].recv(&j, 1000); // wait for 1 second, TODO switch to float
+        cout << j[0] << endl;
+        /*
         auto& t = trxs[0];
         for(int i = 0; i < NUM_TRXS; ++i) {
             const char* msg = (char*)(&i);
@@ -75,8 +89,13 @@ int main(int argc, char** argv) {
             assert(msg == i);
             // no more data to receive
             assert(t.recv(&raw_msg, 0) == 0);
-        }
+        }*/
     } else { // another rank make sure messages get received
+        char p = 'a';
+        char* m = &p;
+        trxs[0].recv(&m, 1000);
+        cout << m[0] << endl;
+        /*
         for(int i = 0; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
             char* raw_msg;
@@ -87,10 +106,17 @@ int main(int argc, char** argv) {
             assert(msg == i);
             // no more data to receive
             assert(t.recv(&raw_msg, 0) == 0);
-        }
+        }*/
     }
 
-    MPIRadioTransceiver::close_mpi_thread();
+    // may need sleep if operations are not blocking and not done yet
+    //std::this_thread::sleep_for(std::chrono::seconds(1));
+    MPIRadioTransceiver::close_mpi_listener();
+    for(size_t i = 0; i < NUM_TRXS; ++i) {
+        auto& t = trxs[i];
+        t.close();
+    }
+
 
     MPI_Finalize();
     return 0;

@@ -1,9 +1,16 @@
 #ifndef MPI_RADIO_TRANSCEIVER_H
 #define MPI_RADIO_TRANSCEIVER_H
 
+// C
 #include <assert.h>
 #include <unistd.h>
 
+// STDLIB
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
+// HIVE-MAP
 #include "communicator.h"
 
 
@@ -20,11 +27,11 @@ public:
     void set_recv_radius(const double r) { m_recv_radius = r; };
     void set_buffer(char* buffer, const size_t size) {
         m_buffer = buffer;
-        m_buffer_size = size;
+        m_max_buffer_size = size;
     };
    
     ssize_t send(
-            const char* data, const size_t size, const int timeout) override;
+            char* data, const size_t size, const int timeout) override;
 
     ssize_t recv(char** data, const int timeout) override;
 
@@ -42,23 +49,49 @@ public:
      *      threadlevel of MPI_THREAD_MULTIPLE, and True on successful spinning
      *      of thread 
      */
-    static bool open_mpi_thread(
+    static bool open_mpi_listener(
             MPIRadioTransceiver* trxs, const size_t trxs_size);
     /**
      * Stops the mpi listener
      */
-    static void close_mpi_thread();
+    static void close_mpi_listener();
+
 
 private:
+    // transceiver parameters
     double m_x;
     double m_y;
     double m_send_duration;
     double m_recv_duration;
     double m_send_radius;
     double m_recv_radius;
-    char* m_buffer;
-    size_t m_buffer_size;
 
+    // buffer variables
+    char* m_buffer; // buffer information gets packed into
+    std::mutex m_buffer_mtx; // serializes changes to the array
+    // conditional that fires when buffer has received data
+    std::condition_variable m_buffer_flag; 
+    // amount of data in the buffer currently
+    size_t m_buffer_size = 0;
+    // largest amount of data possible in the buffer, if this high-water mark is
+    // reached then messages will be dropped
+    size_t m_max_buffer_size;
+    // triggered when the transceiver is receiving information
+    bool m_receiving = false;
+
+    // MPI meta information
+    int m_rank;
+    int m_num_ranks;
+
+    // lister spins up and on a loop of MPI receives until close_mpi_listener
+    // is called
+    static std::thread* mpi_listener_thread;
+    static void mpi_listener(
+            MPIRadioTransceiver* trxs, const size_t trxs_size);
+
+    // mpi channels used
+    static const int RECV_CHANNEL = 0;
+    static const int CLOSE_CHANNEL = 1;
 };
 
 #endif // MPI_RADIO_TRANSCEIVER_H

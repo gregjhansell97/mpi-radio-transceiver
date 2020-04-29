@@ -25,14 +25,14 @@ public:
      *     communicator closed during the send operation
      */
     virtual ssize_t send(
-            const char* data, const size_t size, const int timeout) = 0;
+            char* data, const size_t size, const int timeout) = 0;
 
     /**
      * Receives bytes of data from another communicator
      *
      * Args: 
-     *     data: raw-bytes received (pointer to a pointer), new memory is
-     *      is allocated (must be deleted) TODO change to a shared_ptr
+     *     data: raw-bytes received (pointer to a pointer), memory is valid
+     *      until next receive operation
      *     size: number of bytes received (passed-by-reference)
      *     timeout: blocks on receive
      *
