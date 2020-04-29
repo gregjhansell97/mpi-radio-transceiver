@@ -35,15 +35,18 @@ int main(int argc, char** argv) {
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
-    // CREATE CONTEXT: INITIAL LOCATIONS ARE ZERO
-    MPIRadioTransceiver trxs[NUM_TRXS];
-    char buffers[NUM_TRXS][MAX_BUFFER_SIZE];
-
     // each context is one away from i
     // VISUALIZATION:
     // x-location:  0.....1.....2......3......4
     //            t[0]  t[1]  t[2]   t[3]   t[4]
     // each transceiver is '1' unit away from the others
+    auto trxs = MPIRadioTransceiver::transceivers<NUM_TRXS, MAX_BUFFER_SIZE>();
+    if(trxs == nullptr) {
+        // could not get transceivers
+        MPI_Finalize();
+        return 1;
+    }
+
     for(int i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];
         // setting parameters for t
@@ -53,23 +56,13 @@ int main(int argc, char** argv) {
         t.set_recv_duration(0.0);
         t.set_send_radius(0.25);
         t.set_recv_radius(0.25);
-        t.set_buffer(buffers[i], MAX_BUFFER_SIZE);
     }
 
-    // TODO change to a factor method like
-    // MPIRadioTransceiver::transceivers<10, 1024>()
-    // This will return 10 transceivers with max-buffers of 1024
-    if(!MPIRadioTransceiver::open_mpi_listener(trxs, NUM_TRXS)) {
-        // could not open mpi in a separate thread
-        MPI_Finalize();
-        return 1;
-    }
-    
-
+    // ENSURES: all transceivers done with adjusting their locations
+    MPI_Barrier(MPI_COMM_WORLD); 
 
     // This Test selects moves around the first transceiver index and sees if
     // where it broadcasts changes
-
     if(rank == 0) {
         char m = 'h';
         trxs[0].send(&m, 1, 0);
@@ -118,6 +111,7 @@ int main(int argc, char** argv) {
 
     // may need sleep if operations are not blocking and not done yet
     //std::this_thread::sleep_for(std::chrono::seconds(1));
+    //MPIRadioTransceiver::close_transceivers(transceivers);
     MPIRadioTransceiver::close_mpi_listener();
     for(size_t i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];

@@ -7,11 +7,13 @@
 
 // STDLIB
 #include <condition_variable>
+#include <iostream>
 #include <mutex>
 #include <thread>
 
 // HIVE-MAP
 #include "communicator.h"
+
 
 
 class MPIRadioTransceiver : public hmap::interface::Communicator {
@@ -25,10 +27,6 @@ public:
     void set_recv_duration(const double rd) { m_recv_duration = rd; };
     void set_send_radius(const double r) { m_send_radius = r; };
     void set_recv_radius(const double r) { m_recv_radius = r; };
-    void set_buffer(char* buffer, const size_t size) {
-        m_buffer = buffer;
-        m_max_buffer_size = size;
-    };
    
     ssize_t send(
             char* data, const size_t size, const int timeout) override;
@@ -55,6 +53,32 @@ public:
      * Stops the mpi listener
      */
     static void close_mpi_listener();
+
+    /**
+     * Called only once at the begining to obtain transceivers
+     *
+     * Template Args:
+     *     N: number of transceivers
+     *     B: max buffer size
+     */
+    template<size_t N, size_t B>
+    static MPIRadioTransceiver* transceivers() {
+        static MPIRadioTransceiver trxs[N];
+        static char buffers[N][B];
+
+        for(int i = 0; i < N; ++i) {
+            auto& t = trxs[i];
+            t.m_max_buffer_size = B;
+            t.m_buffer_size = 0;
+            t.m_buffer = buffers[i];
+        }
+        std::cout << N << " ---- " << B << std::endl;
+        if(!open_mpi_listener(trxs, N)) {
+            // could not start listener, somethings wrong
+            return nullptr;
+        }
+        return trxs;
+    }
 
 
 private:
