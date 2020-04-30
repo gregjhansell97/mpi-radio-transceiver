@@ -50,7 +50,7 @@ void MPIRadioTransceiver::mpi_listener(
 
     // MPI received meta information
     MPI_Status status; // was the receive successful?
-    int msg_size = 0; // how many bytes were received?
+    int mpi_msg_size = 0; // how many bytes were received?
     char close_status = 0; // was the close clean?
     int channel; // the channel that became unblocked
     // Set up a non-blocking receive for the thread ending
@@ -88,7 +88,7 @@ void MPIRadioTransceiver::mpi_listener(
             break;
         } else if(channel == RECV_CHANNEL) {
             // get size of the MPI msg
-            MPI_Get_count(&status, MPI_BYTE, &msg_size);
+            MPI_Get_count(&status, MPI_BYTE, &mpi_msg_size);
             // Iterate through transceivers and load their mpi_msg buffers up
             // with new information (if it pertains to them, and their buffer
             // is not maxed out)
@@ -102,9 +102,9 @@ void MPIRadioTransceiver::mpi_listener(
                     // if can't get lock.
                     lock_guard<mutex> buffer_lock(t.m_buffer_mtx);
                     // move memory to buffer on transceiver
-                    memcpy(t.m_buffer + t.m_buffer_size, mpi_msg, msg_size);
+                    memcpy(t.m_buffer + t.m_buffer_size, mpi_msg, mpi_msg_size);
                     // adjust size
-                    t.m_buffer_size += msg_size;
+                    t.m_buffer_size += mpi_msg_size;
                     cout << "size: "<< t.m_buffer_size << endl;
                 }
                 // SHORT BUSY WAIT
@@ -199,8 +199,8 @@ ssize_t MPIRadioTransceiver::recv(char** data, const int timeout) {
         m_receiving = false;
         return 1;
         // TODO Calculate actual size from data offsets
-        // TODO Shrink mpi_msgs (need mpi_msgs_mtx for that)
-        // TODO copy over mpi_msg to newly allocated mpi_msgs memory
+        // TODO Shrink buffer size (need buffer_mtx for that)
+        // TODO copy over buffer to newly re-allocated buffer memory
     } else {
         return 0; // nothing in buffer and timeout reached
     }

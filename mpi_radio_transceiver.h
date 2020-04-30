@@ -42,13 +42,13 @@ public:
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
         static MPIRadioTransceiver trxs[N];
-        static char buffer[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
+        static char buffers[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
 
         for(size_t i = 0; i < N; ++i) {
             auto& t = trxs[i];
             t.m_max_buffer_size = B;
             t.m_buffer_size = 0;
-            t.m_buffer = buffer[i];
+            t.m_buffer = buffers[i];
         }
         if(!open_mpi_listener(trxs, N)) {
             // could not start listener, somethings wrong
@@ -80,7 +80,7 @@ private:
     double m_send_radius;
     double m_recv_radius;
 
-    // mpi_msg buffer variables
+    // Buffer variables.
     char* m_buffer; // buffer information gets packed into
     std::mutex m_buffer_mtx; // serializes changes to the array
     // conditional that fires when an MPI message has been received.
