@@ -28,10 +28,10 @@ using std::cerr;
 using std::endl;
 
 #define _USE_MATH_DEFINES
-#define MAX_SEND_RANGE 2
-#define MAX_RECV_RANGE 2
+#define SND_RCV_RANGE 2
 #define MAX_BUFFER_SIZE 2048
 #define NUM_TRXS 2
+#define RECV_TIMEOUT_MS 50
 
 /**
  * Generates a random point within a circle centered at (x_center, y_center)
@@ -88,8 +88,8 @@ int main(int argc, char** argv) {
         t.set_y(loc.second);
         t.set_send_duration(0.0);
         t.set_recv_duration(0.0);
-        t.set_send_range(0.25);
-        t.set_recv_range(0.25);
+        t.set_send_range(SND_RCV_RANGE);
+        t.set_recv_range(SND_RCV_RANGE);
     }
 
     // Ensures all transceivers finish initializing.
@@ -98,8 +98,42 @@ int main(int argc, char** argv) {
     // This clustering transceiver benchmark tests as follows:
     // - rank 0 trx 0 sends a message
     // - all other trxs across the ranks block waiting for the msg for 50ms
-    // - ranks shut down transceivers and sync, and record across ranks total
-    //   # of trxs that received the msg
+    if (rank == 0) {
+        auto& sender = trxs[0];
+        const char* msg = "Hey from r0 trx0\0";
+        cout << "r0-trx0 sent " <<
+        sender.send(msg, 17, 1) << " bytes" << endl;
+        // TODO Receives from all other ones.
+        // Iterate through all other transceivers on rank 0 to see if they've
+        // received the message.
+        char* rcvd_msg;
+        for (size_t i = 1; i < NUM_TRXS; ++i) {
+            auto& t = trxs[i];
+            // Receive data within the timeout.
+            // Check that the message is only what was originally sent.
+            assert(t.recv(&rcvd_msg, RECV_TIMEOUT_MS) == 17);
+            assert(strcmp(rcvd_msg, "Hey from r0 trx0") == 0);
+            assert(t.recv(&rcvd_msg, 0) == 0);
+        }
+        // Check that the sender never received its own message.
+        assert(sender.recv(&rcvd_msg, 0) == 0);
+    } else { // All other ranks should have received the message.
+        for (size_t i = 0; i < NUM_TRXS; ++i) {
+            auto& t = trxs[i];
+            char* rcvd_msg;
+            // Receive data within timeout bounds.
+            assert(t.recv(&rcvd_msg, RECV_TIMEOUT_MS) == 17);
+            assert(strcmp(rcvd_msg, "Hey from r0 trx0") == 0);
+            assert(t.recv(&rcvd_msg, 0) == 0);
+        }
+    }
+
+    // TODO record across ranks total # of trxs that received the msg
+
+    // Shuts down all transceivers.
+    MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
+
+    // Synchronize MPI ranks.
     MPI_Finalize();
     return 0;
 }
