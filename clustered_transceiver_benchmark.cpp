@@ -31,7 +31,7 @@ using std::endl;
 #define _USE_MATH_DEFINES
 #define SND_RCV_RANGE 2
 #define MAX_BUFFER_SIZE 2048
-#define NUM_TRXS 40
+#define NUM_TRXS 1000
 #define RECV_TIMEOUT_MS 50
 
 /**
