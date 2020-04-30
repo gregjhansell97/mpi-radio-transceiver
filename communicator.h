@@ -5,6 +5,8 @@
 #include <unistd.h>
 
 // Passive object that carries data between communicators.
+// Placed in the communicator.h file for override purposes in the MPI Radio
+// Transceiver files.
 typedef struct MPIRadioTransceiverMessage{
     // Required such that the sending transceiver does not accidentally send a
     // message to itself.
