@@ -37,7 +37,7 @@ void MPIRadioTransceiver::mpi_listener(
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    // max_buffer is the largest expected message
+    // max_msg_size is the largest expected message
     const int max_msg_size = trxs[0].m_max_buffer_size;
     // mpi_msg will take in values from MPI calls
     char* mpi_msg = new char[max_msg_size];
