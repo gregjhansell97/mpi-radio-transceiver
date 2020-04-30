@@ -46,6 +46,7 @@ public:
 
         for(int i = 0; i < N; ++i) {
             auto& t = trxs[i];
+            t.m_id = i;
             t.m_max_mpi_msgs_size = B;
             t.m_mpi_msgs_size = 0;
             t.m_mpi_msgs = mpi_msgs[i];
@@ -68,6 +69,10 @@ public:
 
 
 private:
+    // Identifier unique to each transceiver.
+    // Prevents transceivers from receiving their own messages.
+    int m_id;
+
     // transceiver parameters
     double m_x;
     double m_y;
@@ -124,8 +129,6 @@ private:
      * Stops the mpi listener
      */
     static void close_mpi_listener();
-
-
 };
 
 #endif // MPI_RADIO_TRANSCEIVER_H

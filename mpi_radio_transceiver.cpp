@@ -193,14 +193,14 @@ ssize_t MPIRadioTransceiver::recv(char** data, const int timeout) {
                 [this]{ return m_mpi_msgs_size > 0; }); // conditional to wait for
         m_receiving = false;
     }
-    // now see if there is data in the buffer
-    if(m_mpi_msgs_size > 0) { // there is data in the buffer
+    // now see if there are any mpi_msgs
+    if(m_mpi_msgs_size > 0) { // there is data in the mpi_msgs buffer
         *data = m_mpi_msgs; // this will do for now...
         m_receiving = false;
         return 1;
-        // TODO get actual size
-        // TODO shrink buffer (need buffer_mtx for that)
-        // TODO copy over buffer to newly allcoated memory
+        // TODO Calculate actual size from data offsets
+        // TODO Shrink mpi_msgs (need mpi_msgs_mtx for that)
+        // TODO copy over mpi_msg to newly allocated mpi_msgs memory
     } else {
         return 0; // nothing in buffer and timeout reached
     }
