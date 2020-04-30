@@ -15,18 +15,20 @@
 #include "communicator.h"
 
 // Passive object that carries data between transceivers.
-struct MPI_Message{
+typedef struct MPIRadioTransceiverMessage{
     // Required such that the sending transceiver does not accidentally send a
     // message to itself.
-    int sender_rank;
-    int sender_id;
+    int sender_rank;       // Sending transceiver's rank.
+    int sender_id;         // Sending transceiver's unique ID.
     double sent_x, sent_y; // The location of the sending transceiver.
-    float send_range;      // How far the sending transceiver can send.
+    double send_range;      // How far the sending transceiver can send.
     char* data;            // Actual message contents.
-};
+} MPI_Msg;
 
 class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
+    const double get_x() { return m_x; };
+    const double get_y() { return m_y; };
     void set_x(const double x) { m_x = x; };
     void set_y(const double y) { m_y = y; };
     void set_send_duration(const double sd) { m_send_duration = sd; };
@@ -35,9 +37,9 @@ public:
     void set_recv_radius(const double r) { m_recv_radius = r; };
    
     ssize_t send(
-            MPI_Message* mpi_msg, const size_t size, const int timeout) override;
+        char* mpi_msg, const size_t size, const int timeout) override;
 
-    ssize_t recv(MPI_Message** data, const int timeout) override;
+    ssize_t recv(char** data, const int timeout) override;
 
     void close() override;
 
@@ -51,16 +53,17 @@ public:
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
         static MPIRadioTransceiver trxs[N];
-        static char mpi_msgs[N][B + (B * sizeof(size_t))];
+        static char buffers[N][B + (B * sizeof(MPI_Msg))];
 
+        // Initializes each transceiver.
         for(size_t i = 0; i < N; ++i) {
             auto& t = trxs[i];
-            t.m_max_buffer_size = B;
+            t.m_max_buffer_size = B + (B * sizeof(MPI_Msg));
             t.m_buffer_size = 0;
             t.m_buffer = buffers[i];
         }
         if(!open_mpi_listener(trxs, N)) {
-            // could not start listener, somethings wrong
+            // could not start listener, something's wrong
             return nullptr;
         }
         return trxs;

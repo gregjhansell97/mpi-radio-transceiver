@@ -94,6 +94,8 @@ void MPIRadioTransceiver::mpi_listener(
             // is not maxed out)
             for(size_t i = 0; i < trxs_size; ++i) {
                 auto& t = trxs[i];
+                // Cast mpi_msg back to its original data type.
+                MPI_Msg* mpi_msg = (MPI_Msg*) mpi_msg;
                 // Check if mpi_msg buffer is maxed out; if so, drop message.
                 if (t.m_buffer_size + mpi_msg_size > t.m_max_buffer_size) {
                     continue;

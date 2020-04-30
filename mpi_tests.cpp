@@ -61,14 +61,24 @@ int main(int argc, char** argv) {
     // ENSURES: all transceivers done with adjusting their locations
     MPI_Barrier(MPI_COMM_WORLD); 
 
-    // This Test selects moves around the first transceiver index and sees if
+    // This test selects moves around the first transceiver index and sees if
     // where it broadcasts changes
     if(rank == 0) {
-        char m = 'h';
-        trxs[0].send(&m, 1, 0);
-        char* j = &m;
-        trxs[0].recv(&j, 1000); // wait for 1 second, TODO switch to float
-        cout << j[0] << endl;
+        MPI_Msg msg;
+        msg.data = "h";
+        msg.send_range = 1;
+        msg.sender_id = 0;
+        msg.sender_rank = rank;
+        msg.sent_x = trxs[0].get_x();
+        msg.sent_y = trxs[0].get_y();
+        // char m = 'h';
+        trxs[0].send((char*)&msg, sizeof(msg), 0);
+        char* recv_msg = (char*) &msg;
+        // char* j = &m;
+        trxs[0].recv(&recv_msg, 1000); // wait for 1 second, TODO switch to float
+        // cout << j[0] << endl;
+        // MPI_Msg* recv_msg = (MPI_Msg*) recv_msg;
+        cout << ((MPI_Msg*) recv_msg)->data << endl;
         /*
         auto& t = trxs[0];
         for(int i = 0; i < NUM_TRXS; ++i) {
