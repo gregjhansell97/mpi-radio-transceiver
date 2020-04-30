@@ -14,16 +14,6 @@
 // HIVE-MAP
 #include "communicator.h"
 
-// Passive object that carries data between transceivers.
-typedef struct MPIRadioTransceiverMessage{
-    // Required such that the sending transceiver does not accidentally send a
-    // message to itself.
-    int sender_rank;       // Sending transceiver's rank.
-    int sender_id;         // Sending transceiver's unique ID.
-    double sent_x, sent_y; // The location of the sending transceiver.
-    double send_range;      // How far the sending transceiver can send.
-    char* data;            // Actual message contents.
-} MPI_Msg;
 
 class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
@@ -37,9 +27,9 @@ public:
     void set_recv_radius(const double r) { m_recv_radius = r; };
    
     ssize_t send(
-        char* mpi_msg, const size_t size, const int timeout) override;
+        MPI_Msg* mpi_msg, const size_t size, const int timeout) override;
 
-    ssize_t recv(char** data, const int timeout) override;
+    ssize_t recv(MPI_Msg** data, const int timeout) override;
 
     void close() override;
 
@@ -53,7 +43,7 @@ public:
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
         static MPIRadioTransceiver trxs[N];
-        static char buffers[N][B + (B * sizeof(MPI_Msg))];
+        static MPI_Msg buffers[N][B * sizeof(MPI_Msg)];
 
         // Initializes each transceiver.
         for(size_t i = 0; i < N; ++i) {
@@ -93,7 +83,7 @@ private:
     double m_recv_radius;
 
     // Buffer variables.
-    char* m_buffer; // buffer information gets packed into
+    MPI_Msg* m_buffer; // buffer information gets packed into
     std::mutex m_buffer_mtx; // serializes changes to the array
     // conditional that fires when an MPI message has been received.
     std::condition_variable m_buffer_flag; 
