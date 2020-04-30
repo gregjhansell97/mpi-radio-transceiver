@@ -10,11 +10,12 @@
 
 
 using std::cout;
+using std::cerr;
 using std::endl;
 
 
 #define LOCATION_OFFSET 0.02
-#define NUM_TRXS 1
+#define NUM_TRXS 2
 #define MAX_BUFFER_SIZE 2048
 
 int main(int argc, char** argv) {
@@ -35,11 +36,6 @@ int main(int argc, char** argv) {
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
-    // each context is one away from i
-    // VISUALIZATION:
-    // x-location:  0.....1.....2......3......4
-    //            t[0]  t[1]  t[2]   t[3]   t[4]
-    // each transceiver is '1' unit away from the others
     auto trxs = MPIRadioTransceiver<MAX_BUFFER_SIZE>::transceivers<NUM_TRXS>();
     if(trxs == nullptr) {
         // could not get transceivers
@@ -47,6 +43,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // each context is one away from i
+    // VISUALIZATION:
+    // x-location:  0.....1.....2......3......4
+    //            t[0]  t[1]  t[2]   t[3]   t[4]
+    // each transceiver is '1' unit away from the others
     for(int i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];
         // setting parameters for t
@@ -64,11 +65,13 @@ int main(int argc, char** argv) {
     // This Test selects moves around the first transceiver index and sees if
     // where it broadcasts changes
     if(rank == 0) {
-        char m = 'h';
-        trxs[0].send(&m, 1, 0);
-        char* j = &m;
-        trxs[0].recv(&j, 1000); // wait for 1 second, TODO switch to float
-        cout << j[0] << endl;
+        int msg[4] = {1, 2, 3, 4};
+        trxs[0].send((char*)(&msg), sizeof(msg), 0);
+
+
+        char* raw_msg_rcvd;
+        ssize_t len = trxs[0].recv(&raw_msg_rcvd, 500);
+        cout << "rank-0: " << len << endl;
         /*
         auto& t = trxs[0];
         for(int i = 0; i < NUM_TRXS; ++i) {
@@ -91,10 +94,19 @@ int main(int argc, char** argv) {
             assert(t.recv(&raw_msg, 0) == 0);
         }*/
     } else { // another rank make sure messages get received
-        char p = 'a';
-        char* m = &p;
-        trxs[0].recv(&m, 1000);
-        cout << m[0] << endl;
+        char* raw_msg_rcvd;
+        ssize_t len = trxs[1].recv(&raw_msg_rcvd, 1000); // wait for 1 second,
+        cout << "trx-1-rank-" << rank << ": " << len << endl;
+
+        len = trxs[0].recv(&raw_msg_rcvd, 1000); // wait for 1 second,
+        int* msg_rcvd = (int*)raw_msg_rcvd;
+        for(size_t i = 0; i < 4; ++i) {
+            cout << "trx-0-rank-"<< rank << ": " << msg_rcvd[i] << endl;
+        }
+        //char p = 'a';
+        //char* m = &p;
+        //trxs[0].recv(&m, 1000);
+        //cout << m[0] << endl;
         /*
         for(int i = 0; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
