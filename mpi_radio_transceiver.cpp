@@ -94,14 +94,16 @@ void MPIRadioTransceiver::mpi_listener(
             // is not maxed out)
             for(size_t i = 0; i < trxs_size; ++i) {
                 auto& t = trxs[i];
-                // check if mpi_msg buffer is maxed out, if so drop message
-                { // MPI_MSG BUFFER LOCK
+                // Check if mpi_msg buffer is maxed out; if so, drop message.
+                if (t.m_buffer_size + mpi_msg_size > t.m_max_buffer_size) {
+                    continue;
+                } else { // MPI_MSG BUFFER LOCK
                     // NOTE: this section is locked because the t.m_buffer
                     // can be modified (albeit only shrunken) by t.
                     // A potential optimization would be to skip for later 
                     // if can't get lock.
                     lock_guard<mutex> buffer_lock(t.m_buffer_mtx);
-                    // move memory to buffer on transceiver
+                    // move mpi_msg data to buffer on transceiver
                     memcpy(t.m_buffer + t.m_buffer_size, mpi_msg, mpi_msg_size);
                     // adjust size
                     t.m_buffer_size += mpi_msg_size;
