@@ -42,7 +42,7 @@ void MPIRadioTransceiver::mpi_listener(
     // mpi_msg will take in values from MPI calls
     MPI_Msg* mpi_msg = new MPI_Msg;
 
-    // Set up creation of the MPI_Msg MPI Datatype.
+    // Set up creation of the MPI_Msg MPI_Datatype.
     const int block_counts = 3; // Number of blocks.
     // Data types contained in the struct.
     MPI_Datatype block_types[block_counts] = {
@@ -54,7 +54,7 @@ void MPIRadioTransceiver::mpi_listener(
         offsetof(MPI_Msg, sent_x),
         offsetof(MPI_Msg, data)
     };
-    // Creates the MPI Datatype and commits.
+    // Creates the MPI_Datatype and commits.
     MPI_Datatype MPI_MSG_DT; // MPI wrapper for the MPI_Msg struct.
     MPI_Type_create_struct(
         block_counts, block_lengths, block_offsets, block_types, &MPI_MSG_DT);

@@ -6,5 +6,5 @@ Hive-map communicator that emulates radio communication via MPI
 currently:
 
 ``` bash
-g++ *.cpp -o run-me.exe -std=c++11
+g++ ./*.cpp -o run-me.exe -std=c++11
 ```

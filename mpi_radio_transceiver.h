@@ -38,7 +38,7 @@ public:
      *
      * Template Args:
      *     N: number of transceivers
-     *     B: max buffer size
+     *     B: max elements in buffer
      */
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
@@ -48,9 +48,10 @@ public:
         // Initializes each transceiver.
         for(size_t i = 0; i < N; ++i) {
             auto& t = trxs[i];
-            t.m_max_buffer_size = B + (B * sizeof(MPI_Msg));
+            t.m_max_buffer_size = (B * sizeof(MPI_Msg));
             t.m_buffer_size = 0;
             t.m_buffer = buffers[i];
+            t.m_recvd_msg = new char[sizeof(MPI_Msg)];
         }
         if(!open_mpi_listener(trxs, N)) {
             // could not start listener, something's wrong
@@ -108,6 +109,9 @@ private:
     // mpi channels used
     static const int RECV_CHANNEL = 0;
     static const int CLOSE_CHANNEL = 1;
+
+    // Pointer used to siphon off a received message off the buffer.
+    static char* m_recvd_msg;
 
     // can only create transcievers through template transceivers
     MPIRadioTransceiver();
