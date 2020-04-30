@@ -42,14 +42,13 @@ public:
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
         static MPIRadioTransceiver trxs[N];
-        static char mpi_msgs[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
+        static char buffer[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
 
         for(int i = 0; i < N; ++i) {
             auto& t = trxs[i];
-            t.m_id = i;
-            t.m_max_mpi_msgs_size = B;
-            t.m_mpi_msgs_size = 0;
-            t.m_mpi_msgs = mpi_msgs[i];
+            t.m_max_buffer_size = B;
+            t.m_buffer_size = 0;
+            t.m_buffer = buffer[i];
         }
         if(!open_mpi_listener(trxs, N)) {
             // could not start listener, somethings wrong
@@ -71,7 +70,7 @@ public:
 private:
     // Identifier unique to each transceiver.
     // Prevents transceivers from receiving their own messages.
-    int m_id;
+    size_t m_id;
 
     // transceiver parameters
     double m_x;
@@ -82,15 +81,15 @@ private:
     double m_recv_radius;
 
     // mpi_msg buffer variables
-    char* m_mpi_msgs; // buffer information gets packed into
-    std::mutex m_mpi_msgs_mtx; // serializes changes to the array
+    char* m_buffer; // buffer information gets packed into
+    std::mutex m_buffer_mtx; // serializes changes to the array
     // conditional that fires when an MPI message has been received.
-    std::condition_variable m_mpi_msgs_flag; 
+    std::condition_variable m_buffer_flag; 
     // amount of data in the MPI msgs buffer currently
-    size_t m_mpi_msgs_size = 0;
-    // largest amount of data possible in the mpi msgs buffer, if this
+    size_t m_buffer_size = 0;
+    // largest amount of data possible in the buffer, if this
     // high-water mark is reached then messages will be dropped.
-    size_t m_max_mpi_msgs_size;
+    size_t m_max_buffer_size;
     // triggered when the transceiver is receiving information
     bool m_receiving = false;
 
