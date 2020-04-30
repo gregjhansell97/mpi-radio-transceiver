@@ -19,7 +19,7 @@ public:
      * Args:
      *     data: the raw-bytes of data being sent
      *     size: number of bytes of the data being sent
-     *     timeout: if send is blocking, how long should it wait to send
+     *     timeout: if send is blocking, how long should it wait to send in milliseconds
      *
      * Returns:
      *     status value regarding the success of sending, if less than zero

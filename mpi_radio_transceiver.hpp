@@ -1,5 +1,5 @@
-#ifndef MPI_RADIO_TRANSCEIVER_H
-#define MPI_RADIO_TRANSCEIVER_H
+#ifndef MPI_RADIO_TRANSCEIVER_HPP
+#define MPI_RADIO_TRANSCEIVER_HPP
 
 // C
 #include <assert.h>
@@ -20,6 +20,7 @@
 #include "communicator.h"
 
 
+// B is the max-buffer-size
 template<size_t B>
 class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
@@ -87,11 +88,11 @@ public:
     void close() override { }
 
     /**
-     * Called only once at the begining to obtain transceivers
+     * Called only once at the begining to obtain transceivers and start up
+     * listener thread
      *
      * Template Args:
      *     N: number of transceivers
-     *     B: max elements in buffer
      */
     template<size_t N>
     static MPIRadioTransceiver* transceivers() {
@@ -160,7 +161,7 @@ private:
         size_t sender_id; // unique id (in the scope of rank)
         double send_x, send_y; //location of sending transceiver
         double send_range; // how far sending transceiver can send
-        size_t size;
+        size_t size; // how much data is there
         char data[B]; // message contents
     } MPIMsg;
 
@@ -178,7 +179,7 @@ private:
 
     
     // mailbox variables
-    std::queue<std::shared_ptr<MPIMsg>> m_mailbox;
+    std::queue<std::shared_ptr<MPIMsg>> m_mailbox; // where MPIMsgs are put
     std::mutex m_mailbox_mtx;
     bool m_receiving = false;
     size_t m_buffer_size = 0;
@@ -197,9 +198,6 @@ private:
     static const int RECV_CHANNEL = 0;
     static const int CLOSE_CHANNEL = 1;
 
-    // Pointer used to siphon off a received MPI message off the buffer.
-    //MPI_Msg* m_recvd_msg;
-
     // can only create transcievers through template transceivers
     MPIRadioTransceiver() { 
         int rank = 0;
@@ -209,23 +207,6 @@ private:
         m_rank = rank;
         m_num_ranks = num_ranks;
     }
-
-    /**
-     * Starts the mpi listener on a separate thread
-     *
-     * Args:
-     *     trxs: tranceivers that are connected accross ranks
-     *     trxs_size: number of transceivers
-     *
-     * Returns:
-     *     False if mpi threading capabilities are not provided, need
-     *      threadlevel of MPI_THREAD_MULTIPLE, and True on successful spinning
-     *      of thread 
-     */
-    /*
-    template<size_t N>
-    static bool open_mpi_listener(MPIRadioTransceiver* trxs) {
-    }*/
 
     template<size_t N>
     static void mpi_listener(MPIRadioTransceiver* trxs) {
@@ -319,4 +300,4 @@ private:
 template<size_t B>
 std::thread* MPIRadioTransceiver<B>::mpi_listener_thread;
 
-#endif // MPI_RADIO_TRANSCEIVER_H
+#endif // MPI_RADIO_TRANSCEIVER_HPP
