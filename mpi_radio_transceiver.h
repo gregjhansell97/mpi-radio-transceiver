@@ -14,7 +14,16 @@
 // HIVE-MAP
 #include "communicator.h"
 
-
+// Passive object that carries data between transceivers.
+struct MPI_Message{
+    // Required such that the sending transceiver does not accidentally send a
+    // message to itself.
+    int sender_rank;
+    int sender_id;
+    double sent_x, sent_y; // The location of the sending transceiver.
+    float send_range;      // How far the sending transceiver can send.
+    char* data;            // Actual message contents.
+};
 
 class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
@@ -26,9 +35,9 @@ public:
     void set_recv_radius(const double r) { m_recv_radius = r; };
    
     ssize_t send(
-            char* data, const size_t size, const int timeout) override;
+            MPI_Message* mpi_msg, const size_t size, const int timeout) override;
 
-    ssize_t recv(char** data, const int timeout) override;
+    ssize_t recv(MPI_Message** data, const int timeout) override;
 
     void close() override;
 
@@ -42,7 +51,7 @@ public:
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
         static MPIRadioTransceiver trxs[N];
-        static char mpi_msgs[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
+        static char mpi_msgs[N][B + (B * sizeof(size_t))];
 
         for(int i = 0; i < N; ++i) {
             auto& t = trxs[i];
@@ -82,15 +91,15 @@ private:
     double m_recv_radius;
 
     // mpi_msg buffer variables
-    char* m_mpi_msgs; // buffer information gets packed into
-    std::mutex m_mpi_msgs_mtx; // serializes changes to the array
+    MPI_Message* m_buffer; // buffer information gets packed into
+    std::mutex m_buffer_mtx; // serializes changes to the array
     // conditional that fires when an MPI message has been received.
-    std::condition_variable m_mpi_msgs_flag; 
+    std::condition_variable m_buffer_flag; 
     // amount of data in the MPI msgs buffer currently
-    size_t m_mpi_msgs_size = 0;
+    size_t m_buffer_size = 0;
     // largest amount of data possible in the mpi msgs buffer, if this
     // high-water mark is reached then messages will be dropped.
-    size_t m_max_mpi_msgs_size;
+    size_t m_buffer_size;
     // triggered when the transceiver is receiving information
     bool m_receiving = false;
 

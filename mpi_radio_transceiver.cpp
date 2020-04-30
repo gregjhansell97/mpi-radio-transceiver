@@ -169,7 +169,7 @@ MPIRadioTransceiver::MPIRadioTransceiver() {
 }
 
 ssize_t MPIRadioTransceiver::send(
-        char* data, const size_t size, const int timeout) {
+        MPI_Message* data, const size_t size, const int timeout) {
     if(size > m_max_mpi_msgs_size) {
         return Communicator::error;
     }
@@ -182,7 +182,7 @@ ssize_t MPIRadioTransceiver::send(
     return size;
 }
 
-ssize_t MPIRadioTransceiver::recv(char** data, const int timeout) {
+ssize_t MPIRadioTransceiver::recv(MPI_Message** data, const int timeout) {
     if(m_mpi_msgs_size == 0) {
         m_receiving = true;
         mutex mtx;
@@ -195,7 +195,7 @@ ssize_t MPIRadioTransceiver::recv(char** data, const int timeout) {
     }
     // now see if there are any mpi_msgs
     if(m_mpi_msgs_size > 0) { // there is data in the mpi_msgs buffer
-        *data = m_mpi_msgs; // this will do for now...
+        *data = (MPI_Message*) m_mpi_msgs; // this will do for now...
         m_receiving = false;
         return 1;
         // TODO Calculate actual size from data offsets
