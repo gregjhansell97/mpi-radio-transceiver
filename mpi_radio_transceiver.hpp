@@ -33,7 +33,7 @@ public:
     void set_recv_range(const double r) { m_recv_range = r; };
    
     ssize_t send(
-            char* data, const size_t size, const int timeout) override {
+            const char* data, const size_t size, const int timeout) override {
         if(size > B) {
             return Communicator::error;
         }
@@ -79,7 +79,6 @@ public:
             return data_size;
         } else {
             // not message was received, timeout must have been hit
-            std::cout << "Nothing in buffer." << std::endl;
             *data = nullptr;
             return 0; // nothing in buffer and timeout reached
         }
@@ -288,9 +287,9 @@ private:
                         continue;
                     }
                     // calculate distance
-                    const long mag = mpi_msg->send_range + t.m_recv_range;
-                    const long dx = mpi_msg->send_x - t.m_x;
-                    const long dy = mpi_msg->send_y - t.m_y;
+                    const double mag = mpi_msg->send_range + t.m_recv_range;
+                    const double dx = mpi_msg->send_x - t.m_x;
+                    const double dy = mpi_msg->send_y - t.m_y;
                     if(mag*mag < dx*dx + dy*dy) {
                         // nodes too far away
                         continue;
@@ -305,7 +304,6 @@ private:
                                 t.m_mailbox_mtx);
                         t.m_mailbox.push(mpi_msg);
                         t.m_buffer_size += mpi_msg->size;
-                        std::cout << "size: "<< t.m_buffer_size << std::endl;
                     }
                     // SHORT BUSY WAIT
                     while(t.m_receiving) {

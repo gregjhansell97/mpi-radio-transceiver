@@ -27,7 +27,7 @@ public:
      *     communicator closed during the send operation
      */
     virtual ssize_t send(
-            char* data, const size_t size, const int timeout) = 0;
+            const char* data, const size_t size, const int timeout) = 0;
 
     /**
      * Receives bytes of data from another communicator

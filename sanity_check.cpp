@@ -15,7 +15,7 @@ using std::endl;
 
 
 #define LOCATION_OFFSET 0.02
-#define NUM_TRXS 2
+#define NUM_TRXS 100 //  number of transceivers per rank
 #define MAX_BUFFER_SIZE 2048
 
 int main(int argc, char** argv) {
@@ -65,61 +65,42 @@ int main(int argc, char** argv) {
     // This Test selects moves around the first transceiver index and sees if
     // where it broadcasts changes
     if(rank == 0) {
-        int msg[4] = {1, 2, 3, 4};
-        trxs[0].send((char*)(&msg), sizeof(msg), 0);
-
-
-        char* raw_msg_rcvd;
-        ssize_t len = trxs[0].recv(&raw_msg_rcvd, 500);
-        cout << "rank-0: " << len << endl;
-        /*
-        auto& t = trxs[0];
+        auto& sender = trxs[0];
         for(int i = 0; i < NUM_TRXS; ++i) {
+            sender.set_x(i + LOCATION_OFFSET); 
             const char* msg = (char*)(&i);
             // send message with size, and a timeout of 0 
-            assert(t.send(msg, sizeof(i), 1) == sizeof(i));
+            assert(sender.send(msg, sizeof(i), 1) == sizeof(i));
             // shift x to another location and publish again
-            t.set_x(i + LOCATION_OFFSET); 
         }
         // go through others and verify that they received a message
+        char* raw_msg;
         for(int i = 1; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
-            char* raw_msg;
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 1) == sizeof(i));
-            int msg = *(int*)(raw_msg);
+            assert(t.recv(&raw_msg, 1000) == sizeof(i));
+            int rcvd_msg = *(int*)(raw_msg);
             // message received better be only i
-            assert(msg == i);
+            assert(rcvd_msg == i);
             // no more data to receive
             assert(t.recv(&raw_msg, 0) == 0);
-        }*/
-    } else { // another rank make sure messages get received
-        char* raw_msg_rcvd;
-        ssize_t len = trxs[1].recv(&raw_msg_rcvd, 1000); // wait for 1 second,
-        cout << "trx-1-rank-" << rank << ": " << len << endl;
-
-        len = trxs[0].recv(&raw_msg_rcvd, 1000); // wait for 1 second,
-        int* msg_rcvd = (int*)raw_msg_rcvd;
-        for(size_t i = 0; i < 4; ++i) {
-            cout << "trx-0-rank-"<< rank << ": " << msg_rcvd[i] << endl;
         }
-        //char p = 'a';
-        //char* m = &p;
-        //trxs[0].recv(&m, 1000);
-        //cout << m[0] << endl;
-        /*
+        assert(sender.recv(&raw_msg, 0) == 0);
+    } else { // another rank make sure messages get received
         for(int i = 0; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
             char* raw_msg;
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 1) == sizeof(i));
-            int msg = *(int*)(raw_msg);
+            assert(t.recv(&raw_msg, 1000) == sizeof(i));
+            int rcvd_msg = *(int*)(raw_msg);
             // message received better be only i
-            assert(msg == i);
+            assert(rcvd_msg == i);
             // no more data to receive
             assert(t.recv(&raw_msg, 0) == 0);
-        }*/
+        }
     }
+
+    cout << "TEST SUCCEEDED!!!" << endl;
 
     // may need sleep if operations are not blocking and not done yet
     //std::this_thread::sleep_for(std::chrono::seconds(1));
