@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
     for(int i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];
         // setting parameters for t
+        t.set_m_id(i);
         t.set_x(i + 0.01);
         t.set_y(0.0);
         t.set_send_duration(0.0);

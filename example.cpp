@@ -42,7 +42,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-
     // set initial values for transceivers
     auto& t0 = trxs[0];
     t0.set_x(0);

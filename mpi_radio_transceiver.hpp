@@ -26,6 +26,7 @@ class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
     const double get_x() { return m_x; };
     const double get_y() { return m_y; };
+    void set_m_id(const size_t id) { m_id = id; };
     void set_x(const double x) { m_x = x; };
     void set_y(const double y) { m_y = y; };
     void set_send_duration(const double sd) { m_send_duration = sd; };
@@ -190,7 +191,7 @@ private:
     int m_rank;
     int m_num_ranks;
 
-    // lister spins up and on a loop of MPI receives until close_mpi_listener
+    // listener spins up and on a loop of MPI receives until close_mpi_listener
     // is called
     static std::thread* mpi_listener_thread;
 
@@ -280,15 +281,15 @@ private:
                         continue;
                     }
                     { 
-                        // MPI_MSG BUFFER LOCK
-                        // A potential optimization would be to skip for later 
-                        // if can't get lock:
-                        //    swap it with node at end of list,
-                        //    decrement i and continue;
-                        std::lock_guard<std::mutex> mailbox_lock(
-                                t.m_mailbox_mtx);
-                        t.m_mailbox.push(mpi_msg);
-                        t.m_buffer_size += mpi_msg->size;
+                    // MPI_MSG BUFFER LOCK
+                    // A potential optimization would be to skip for later 
+                    // if can't get lock:
+                    //    swap it with node at end of list,
+                    //    decrement i and continue;
+                    std::lock_guard<std::mutex> mailbox_lock(
+                            t.m_mailbox_mtx);
+                    t.m_mailbox.push(mpi_msg);
+                    t.m_buffer_size += mpi_msg->size;
                     }
                     // SHORT BUSY WAIT
                     while(t.m_receiving) {
