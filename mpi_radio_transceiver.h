@@ -15,9 +15,10 @@
 #include "communicator.h"
 
 
-
 class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
+    const double get_x() { return m_x; };
+    const double get_y() { return m_y; };
     void set_x(const double x) { m_x = x; };
     void set_y(const double y) { m_y = y; };
     void set_send_duration(const double sd) { m_send_duration = sd; };
@@ -26,9 +27,9 @@ public:
     void set_recv_radius(const double r) { m_recv_radius = r; };
    
     ssize_t send(
-            char* data, const size_t size, const int timeout) override;
+        MPI_Msg* mpi_msg, const size_t size, const int timeout) override;
 
-    ssize_t recv(char** data, const int timeout) override;
+    ssize_t recv(MPI_Msg** data, const int timeout) override;
 
     void close() override;
 
@@ -37,21 +38,25 @@ public:
      *
      * Template Args:
      *     N: number of transceivers
-     *     B: max buffer size
+     *     B: max elements in buffer
      */
     template<size_t N, size_t B>
     static MPIRadioTransceiver* transceivers() {
         static MPIRadioTransceiver trxs[N];
-        static char buffers[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
+        static MPI_Msg buffers[N][B * sizeof(MPI_Msg)];
+        static MPI_Msg recvd_msgs[N][sizeof(MPI_Msg)];
 
-        for(int i = 0; i < N; ++i) {
+        // Initializes each transceiver.
+        for(size_t i = 0; i < N; ++i) {
             auto& t = trxs[i];
-            t.m_max_buffer_size = B;
+            t.m_max_buffer_size = (B * sizeof(MPI_Msg));
             t.m_buffer_size = 0;
             t.m_buffer = buffers[i];
+            t.m_recvd_msg = recvd_msgs[i];
         }
+
         if(!open_mpi_listener(trxs, N)) {
-            // could not start listener, somethings wrong
+            // could not start listener, something's wrong
             return nullptr;
         }
         return trxs;
@@ -68,6 +73,10 @@ public:
 
 
 private:
+    // Identifier unique to each transceiver.
+    // Prevents transceivers from receiving their own messages.
+    size_t m_id;
+
     // transceiver parameters
     double m_x;
     double m_y;
@@ -76,15 +85,15 @@ private:
     double m_send_radius;
     double m_recv_radius;
 
-    // buffer variables
-    char* m_buffer; // buffer information gets packed into
+    // Buffer variables.
+    MPI_Msg* m_buffer; // buffer information gets packed into
     std::mutex m_buffer_mtx; // serializes changes to the array
-    // conditional that fires when buffer has received data
+    // conditional that fires when an MPI message has been received.
     std::condition_variable m_buffer_flag; 
-    // amount of data in the buffer currently
+    // amount of data in the MPI msgs buffer currently
     size_t m_buffer_size = 0;
-    // largest amount of data possible in the buffer, if this high-water mark is
-    // reached then messages will be dropped
+    // largest amount of data possible in the buffer, if this
+    // high-water mark is reached then messages will be dropped.
     size_t m_max_buffer_size;
     // triggered when the transceiver is receiving information
     bool m_receiving = false;
@@ -102,6 +111,9 @@ private:
     // mpi channels used
     static const int RECV_CHANNEL = 0;
     static const int CLOSE_CHANNEL = 1;
+
+    // Pointer used to siphon off a received MPI message off the buffer.
+    MPI_Msg* m_recvd_msg;
 
     // can only create transcievers through template transceivers
     MPIRadioTransceiver();
@@ -124,8 +136,6 @@ private:
      * Stops the mpi listener
      */
     static void close_mpi_listener();
-
-
 };
 
 #endif // MPI_RADIO_TRANSCEIVER_H

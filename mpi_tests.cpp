@@ -35,11 +35,6 @@ int main(int argc, char** argv) {
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
-    // each context is one away from i
-    // VISUALIZATION:
-    // x-location:  0.....1.....2......3......4
-    //            t[0]  t[1]  t[2]   t[3]   t[4]
-    // each transceiver is '1' unit away from the others
     auto trxs = MPIRadioTransceiver::transceivers<NUM_TRXS, MAX_BUFFER_SIZE>();
     if(trxs == nullptr) {
         // could not get transceivers
@@ -47,6 +42,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // each context is one away from i
+    // VISUALIZATION:
+    // x-location:  0.....1.....2......3......4
+    //            t[0]  t[1]  t[2]   t[3]   t[4]
+    // each transceiver is '1' unit away from the others
     for(int i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];
         // setting parameters for t
@@ -61,14 +61,21 @@ int main(int argc, char** argv) {
     // ENSURES: all transceivers done with adjusting their locations
     MPI_Barrier(MPI_COMM_WORLD); 
 
-    // This Test selects moves around the first transceiver index and sees if
+    // This test selects moves around the first transceiver index and sees if
     // where it broadcasts changes
     if(rank == 0) {
-        char m = 'h';
-        trxs[0].send(&m, 1, 0);
-        char* j = &m;
-        trxs[0].recv(&j, 1000); // wait for 1 second, TODO switch to float
-        cout << j[0] << endl;
+        MPI_Msg mpi_msg;
+        char msg_contents = 'H';
+        mpi_msg.data = (char*) (&msg_contents);
+        mpi_msg.send_range = 1;
+        mpi_msg.sender_id = 0;
+        mpi_msg.sender_rank = rank;
+        mpi_msg.sent_x = trxs[0].get_x();
+        mpi_msg.sent_y = trxs[0].get_y();
+        trxs[0].send(&mpi_msg, sizeof(mpi_msg), 0);
+        MPI_Msg* recv_msg = (MPI_Msg*) &mpi_msg;
+        trxs[0].recv(&recv_msg, 1000); // wait for 1 second, TODO switch to float
+        cout << "Data: " << recv_msg->data << endl;
         /*
         auto& t = trxs[0];
         for(int i = 0; i < NUM_TRXS; ++i) {
@@ -91,10 +98,17 @@ int main(int argc, char** argv) {
             assert(t.recv(&raw_msg, 0) == 0);
         }*/
     } else { // another rank make sure messages get received
+        MPI_Msg mpi_msg;
         char p = 'a';
-        char* m = &p;
-        trxs[0].recv(&m, 1000);
-        cout << m[0] << endl;
+        mpi_msg.data = (char*)(&p);
+        mpi_msg.send_range = 1;
+        mpi_msg.sender_id = 0;
+        mpi_msg.sender_rank = rank;
+        mpi_msg.sent_x = trxs[0].get_x();
+        mpi_msg.sent_y = trxs[0].get_y();
+        MPI_Msg* recv_msg = (MPI_Msg*) (&mpi_msg);
+        trxs[0].recv(&recv_msg, 1000);
+        cout << "Data: " << recv_msg->data << endl;
         /*
         for(int i = 0; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
