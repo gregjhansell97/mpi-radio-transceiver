@@ -37,8 +37,8 @@ void MPIRadioTransceiver::mpi_listener(
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    // max_buffer is the largest expected message
-    const int max_msg_size = trxs[0].m_max_mpi_msgs_size;
+    // max_msg_size is the largest expected message
+    const int max_msg_size = trxs[0].m_max_buffer_size;
     // mpi_msg will take in values from MPI calls
     char* mpi_msg = new char[max_msg_size];
     
@@ -50,7 +50,7 @@ void MPIRadioTransceiver::mpi_listener(
 
     // MPI received meta information
     MPI_Status status; // was the receive successful?
-    int msg_size = 0; // how many bytes were received?
+    int mpi_msg_size = 0; // how many bytes were received?
     char close_status = 0; // was the close clean?
     int channel; // the channel that became unblocked
     // Set up a non-blocking receive for the thread ending
@@ -88,29 +88,31 @@ void MPIRadioTransceiver::mpi_listener(
             break;
         } else if(channel == RECV_CHANNEL) {
             // get size of the MPI msg
-            MPI_Get_count(&status, MPI_BYTE, &msg_size);
+            MPI_Get_count(&status, MPI_BYTE, &mpi_msg_size);
             // Iterate through transceivers and load their mpi_msg buffers up
             // with new information (if it pertains to them, and their buffer
             // is not maxed out)
             for(size_t i = 0; i < trxs_size; ++i) {
                 auto& t = trxs[i];
-                // check if mpi_msg buffer is maxed out, if so drop message
-                { // MPI_MSG BUFFER LOCK
+                // Check if mpi_msg buffer is maxed out; if so, drop message.
+                if (t.m_buffer_size + mpi_msg_size > t.m_max_buffer_size) {
+                    continue;
+                } else { // MPI_MSG BUFFER LOCK
                     // NOTE: this section is locked because the t.m_buffer
                     // can be modified (albeit only shrunken) by t.
                     // A potential optimization would be to skip for later 
                     // if can't get lock.
-                    lock_guard<mutex> mpi_msgs_lock(t.m_mpi_msgs_mtx);
-                    // move memory to buffer on transceiver
-                    memcpy(t.m_mpi_msgs + t.m_mpi_msgs_size, mpi_msg, msg_size);
+                    lock_guard<mutex> buffer_lock(t.m_buffer_mtx);
+                    // move mpi_msg data to buffer on transceiver
+                    memcpy(t.m_buffer + t.m_buffer_size, mpi_msg, mpi_msg_size);
                     // adjust size
-                    t.m_mpi_msgs_size += msg_size;
-                    cout << "size: "<< t.m_mpi_msgs_size << endl;
+                    t.m_buffer_size += mpi_msg_size;
+                    cout << "size: "<< t.m_buffer_size << endl;
                 }
                 // SHORT BUSY WAIT
                 while(t.m_receiving) {
                     // ends any blocking mutexes
-                    t.m_mpi_msgs_flag.notify_all();
+                    t.m_buffer_flag.notify_all();
                 }
             }
         }
@@ -169,8 +171,8 @@ MPIRadioTransceiver::MPIRadioTransceiver() {
 }
 
 ssize_t MPIRadioTransceiver::send(
-        MPI_Message* data, const size_t size, const int timeout) {
-    if(size > m_max_mpi_msgs_size) {
+        char* data, const size_t size, const int timeout) {
+    if(size > m_max_buffer_size) {
         return Communicator::error;
     }
     // iterate through all ranks and send data
@@ -182,25 +184,25 @@ ssize_t MPIRadioTransceiver::send(
     return size;
 }
 
-ssize_t MPIRadioTransceiver::recv(MPI_Message** data, const int timeout) {
-    if(m_mpi_msgs_size == 0) {
+ssize_t MPIRadioTransceiver::recv(char** data, const int timeout) {
+    if(m_buffer_size == 0) {
         m_receiving = true;
         mutex mtx;
         unique_lock<mutex> lk(mtx);
-        m_mpi_msgs_flag.wait_for(
+        m_buffer_flag.wait_for(
                 lk, // lock to block on  
                 milliseconds(timeout), // time to wait on
-                [this]{ return m_mpi_msgs_size > 0; }); // conditional to wait for
+                [this]{ return m_buffer_size > 0; }); // conditional to wait for
         m_receiving = false;
     }
-    // now see if there are any mpi_msgs
-    if(m_mpi_msgs_size > 0) { // there is data in the mpi_msgs buffer
-        *data = (MPI_Message*) m_mpi_msgs; // this will do for now...
+    // now see if there is data in the buffer
+    if(m_buffer_size > 0) { // there is data in the mpi msg buffer
+        *data = m_buffer; // this will do for now...
         m_receiving = false;
         return 1;
         // TODO Calculate actual size from data offsets
-        // TODO Shrink mpi_msgs (need mpi_msgs_mtx for that)
-        // TODO copy over mpi_msg to newly allocated mpi_msgs memory
+        // TODO Shrink buffer size (need buffer_mtx for that)
+        // TODO copy over buffer to newly re-allocated buffer memory
     } else {
         return 0; // nothing in buffer and timeout reached
     }
