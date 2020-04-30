@@ -42,7 +42,7 @@ void MPIRadioTransceiver::mpi_listener(
     // mpi_msg will take in values from MPI calls
     MPI_Msg* mpi_msg = new MPI_Msg;
 
-    // Set up creation of the MPI_Msg MPI_Datatype.
+    // Set up creation of the MPI_Msg MPI Datatype.
     const int block_counts = 3; // Number of blocks.
     // Data types contained in the struct.
     MPI_Datatype block_types[block_counts] = {
@@ -54,7 +54,7 @@ void MPIRadioTransceiver::mpi_listener(
         offsetof(MPI_Msg, sent_x),
         offsetof(MPI_Msg, data)
     };
-    // Creates the MPI_Datatype and commits.
+    // Creates the MPI Datatype and commits.
     MPI_Datatype MPI_MSG_DT; // MPI wrapper for the MPI_Msg struct.
     MPI_Type_create_struct(
         block_counts, block_lengths, block_offsets, block_types, &MPI_MSG_DT);
@@ -218,10 +218,13 @@ ssize_t MPIRadioTransceiver::recv(MPI_Msg** data, const int timeout) {
     }
     // now see if there is data in the buffer
     if(m_buffer_size > 0) { // there is data in the mpi msg buffer
-        *data = m_buffer; // this will do for now...
+        // Siphon off the received mpi msg off the buffer.
+        memcpy(m_buffer, m_recvd_msg, sizeof(MPI_Msg));
+        *data = m_recvd_msg; // this will do for now...
         m_receiving = false;
         return 1;
-        // TODO Calculate actual size from data offsets
+        // TODO Calculate actual size from data offsets (not MPI_Msg)
+        // TODO Remove siphoned off message from buffer
         // TODO Shrink buffer size (need buffer_mtx for that)
         // TODO copy over buffer to newly re-allocated buffer memory
     } else {
