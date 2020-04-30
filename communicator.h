@@ -4,18 +4,6 @@
 #include <assert.h>
 #include <unistd.h>
 
-// Passive object that carries data between communicators.
-// Placed in the communicator.h file for override purposes in the MPI Radio
-// Transceiver files.
-typedef struct MPIRadioTransceiverMessage{
-    // Required such that the sending transceiver does not accidentally send a
-    // message to itself.
-    int sender_rank;       // Sending transceiver's rank.
-    int sender_id;         // Sending transceiver's unique ID.
-    double sent_x, sent_y; // The location of the sending transceiver.
-    double send_range;     // How far the sending transceiver can send.
-    char* data;            // Actual message contents.
-} MPI_Msg;
 
 
 namespace hmap {
@@ -39,7 +27,7 @@ public:
      *     communicator closed during the send operation
      */
     virtual ssize_t send(
-            MPI_Msg* data, const size_t size, const int timeout) = 0;
+            char* data, const size_t size, const int timeout) = 0;
 
     /**
      * Receives bytes of data from another communicator
@@ -56,7 +44,7 @@ public:
      *     (Communicator::error) or the communicator closed during the recv
      *     operation
      */
-    virtual ssize_t recv(MPI_Msg** data, const int timeout) = 0;
+    virtual ssize_t recv(char** data, const int timeout) = 0;
 
     /**
      * Idempotent method that ends send and recv capabilities and wraps up any

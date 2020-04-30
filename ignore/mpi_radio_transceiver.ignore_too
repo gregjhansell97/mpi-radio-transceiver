@@ -7,9 +7,6 @@
 #include <chrono>
 #include <iostream>
 
-// MPI
-#include "mpi.h"
-
 
 // std namespace usage
 using std::chrono::milliseconds;
@@ -25,6 +22,7 @@ using hmap::interface::Communicator;
 
 thread* MPIRadioTransceiver::mpi_listener_thread{nullptr};
 
+#if 0
 void MPIRadioTransceiver::mpi_listener(
         MPIRadioTransceiver* trxs, 
         const size_t trxs_size) {
@@ -39,12 +37,23 @@ void MPIRadioTransceiver::mpi_listener(
 
     // max_msg_size is the largest expected message
     const int max_msg_size = trxs[0].m_max_buffer_size;
+    char* raw_msg;
+
     // mpi_msg will take in values from MPI calls
-    MPI_Msg* mpi_msg = new MPI_Msg;
+    //MPI_Msg* mpi_msg = new MPI_Msg;
+    
+    
+    //struct {
+
+    raw_msg = new char[trxs_size];
+
+
+
 
     // Set up creation of the MPI_Msg MPI Datatype.
-    const int block_counts = 3; // Number of blocks.
+    //const int block_counts = 3; // Number of blocks.
     // Data types contained in the struct.
+    /*
     MPI_Datatype block_types[block_counts] = {
         MPI_INT, MPI_DOUBLE, MPI_CHAR};
     int block_lengths[block_counts] = { // Elements per block.
@@ -58,7 +67,7 @@ void MPIRadioTransceiver::mpi_listener(
     MPI_Datatype MPI_MSG_DT; // MPI wrapper for the MPI_Msg struct.
     MPI_Type_create_struct(
         block_counts, block_lengths, block_offsets, block_types, &MPI_MSG_DT);
-    MPI_Type_commit(&MPI_MSG_DT);
+    MPI_Type_commit(&MPI_MSG_DT);*/
 
     // set up Irecv requests
     const int RECV_INDEX = 0; // index for recv requests
@@ -68,7 +77,7 @@ void MPIRadioTransceiver::mpi_listener(
 
     // MPI received meta information
     MPI_Status status; // was the receive successful?
-    int mpi_msg_size = 0; // how many bytes were received?
+    int msg_size = 0; // how many bytes were received?
     char close_status = 0; // was the close clean?
     int channel; // the channel that became unblocked
     // Set up a non-blocking receive for the thread ending
@@ -90,9 +99,9 @@ void MPIRadioTransceiver::mpi_listener(
         // ========================================== BODY
         // 5. the actual message
         MPI_Irecv(
-            mpi_msg, // would-be received data
+            raw_msg, // would-be received data
             max_msg_size, // max size the received data can be
-            MPI_MSG_DT, // type of data being received
+            MPI_BYTE, // type of data being received
             MPI_ANY_SOURCE, // Source of data being received (any communicator)
             RECV_CHANNEL, 
             MPI_COMM_WORLD, // mpi-communicator used
@@ -102,11 +111,11 @@ void MPIRadioTransceiver::mpi_listener(
             // This is where clean up of local variables happen and any other
             // necessary closing down operations. This channel is messaged when
             // the rank is ending
-            delete [] mpi_msg;
+            delete [] raw_msg;
             break;
         } else if(channel == RECV_CHANNEL) {
             // get size of the MPI msg
-            MPI_Get_count(&status, MPI_BYTE, &mpi_msg_size);
+            MPI_Get_count(&status, MPI_BYTE, &msg_size);
             // Iterate through transceivers and load their mpi_msg buffers up
             // with new information (if it pertains to them, and their buffer
             // is not maxed out)
@@ -115,19 +124,20 @@ void MPIRadioTransceiver::mpi_listener(
                 auto& t = trxs[i];
                 // Check if mpi_msg buffer is maxed out; if so, drop message.
                 // If the sender is itself, drop message.
-                if (t.m_buffer_size + mpi_msg_size > t.m_max_buffer_size
-                    || mpi_msg->sender_id == i) {
-                    continue;
-                } else { // MPI_MSG BUFFER LOCK
+                //if (t.m_buffer_size + msg_size > t.m_max_buffer_size
+                //    || mpi_msg->sender_id == i) {
+                //    continue;
+                //} else 
+                { // MPI_MSG BUFFER LOCK
                     // NOTE: this section is locked because the t.m_buffer
                     // can be modified (albeit only shrunken) by t.
                     // A potential optimization would be to skip for later 
                     // if can't get lock.
                     lock_guard<mutex> buffer_lock(t.m_buffer_mtx);
                     // move mpi_msg data to buffer on transceiver
-                    memcpy(t.m_buffer + t.m_buffer_size, mpi_msg, mpi_msg_size);
+                    memcpy(t.m_buffer + t.m_buffer_size, raw_msg, msg_size);
                     // adjust size
-                    t.m_buffer_size += mpi_msg_size;
+                    t.m_buffer_size += msg_size;
                     cout << "size: "<< t.m_buffer_size << endl;
                 }
                 // SHORT BUSY WAIT
@@ -139,23 +149,12 @@ void MPIRadioTransceiver::mpi_listener(
         }
     }
 }
+#endif
 
-bool MPIRadioTransceiver::open_mpi_listener(
+/*bool MPIRadioTransceiver::open_mpi_listener(
         MPIRadioTransceiver* trxs,
         const size_t trxs_size) {
-    int provided_thread_support;
-    MPI_Query_thread(&provided_thread_support);
-    if(provided_thread_support != MPI_THREAD_MULTIPLE) {
-        cout << provided_thread_support << endl; 
-        cout << "ERROR: need MPI_THREAD_MULTIPLE support" << endl;
-        return false; // something went wrong
-    } 
-    // creates a new thread and starts it up
-    mpi_listener_thread = new std::thread(
-            MPIRadioTransceiver::mpi_listener, trxs, trxs_size);
-
-    return true;
-}
+}*/
 
 void MPIRadioTransceiver::close_mpi_listener() {
     // this is where the close message is sent
@@ -182,17 +181,11 @@ void MPIRadioTransceiver::close_transceivers(
     
 
 MPIRadioTransceiver::MPIRadioTransceiver() { 
-    int rank = 0;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    int num_ranks = 0;
-    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
-    m_rank = rank;
-    m_num_ranks = num_ranks;
 
 }
 
 ssize_t MPIRadioTransceiver::send(
-        MPI_Msg* data, const size_t size, const int timeout) {
+        char* data, const size_t size, const int timeout) {
     if(size > m_max_buffer_size) {
         return Communicator::error;
     }
@@ -205,7 +198,7 @@ ssize_t MPIRadioTransceiver::send(
     return size;
 }
 
-ssize_t MPIRadioTransceiver::recv(MPI_Msg** data, const int timeout) {
+ssize_t MPIRadioTransceiver::recv(char** data, const int timeout) {
     if(m_buffer_size == 0) {
         m_receiving = true;
         mutex mtx;
@@ -219,8 +212,8 @@ ssize_t MPIRadioTransceiver::recv(MPI_Msg** data, const int timeout) {
     // now see if there is data in the buffer
     if(m_buffer_size > 0) { // there is data in the mpi msg buffer
         // Siphon off the received mpi msg off the buffer.
-        memcpy(m_buffer, m_recvd_msg, sizeof(MPI_Msg));
-        *data = m_recvd_msg; // this will do for now...
+        //memcpy(m_buffer, m_recvd_msg, sizeof(MPI_Msg));
+        *data = m_buffer; // this will do for now...
         m_receiving = false;
         return 1;
         // TODO Calculate actual size from data offsets (not MPI_Msg)
