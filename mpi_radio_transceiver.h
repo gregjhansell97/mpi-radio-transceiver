@@ -44,7 +44,7 @@ public:
         static MPIRadioTransceiver trxs[N];
         static char buffer[N][B]; // TODO GROW OUT TO ACTUAL MAX BUFFER
 
-        for(int i = 0; i < N; ++i) {
+        for(size_t i = 0; i < N; ++i) {
             auto& t = trxs[i];
             t.m_max_buffer_size = B;
             t.m_buffer_size = 0;
