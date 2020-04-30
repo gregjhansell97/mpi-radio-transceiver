@@ -93,9 +93,10 @@ int main(int argc, char** argv) {
         t.set_recv_range(SND_RCV_RANGE);
     }
 
-    // Ensures all transceivers finish initializing.
+    // Ensures all transceivers in all ranks are ready before test starts.
     MPI_Barrier(MPI_COMM_WORLD);
 
+    // TODO sync ENSURES
     // This clustering transceiver benchmark tests as follows:
     // - rank 0 trx 0 sends a message
     // - all other trxs across the ranks block waiting for the msg for 50ms
@@ -138,10 +139,15 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Record rank's total # of trxs that received the msg.
-    std::string filename = "rank_" + std::to_string(rank) + ".txt";
-    std::ofstream file(filename);
-    file << counter << std::endl;
+    // Reduce the counters into a global counter.
+    int global_counter = 0;
+    MPI_Reduce(&counter, &global_counter, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    // Record the world's total # of trxs that received the msg.
+    if (rank == 0) {
+        std::ofstream file("num_trxs_rcvd_msgs.txt");
+        file << global_counter << std::endl;
+    }
 
     // Shuts down all transceivers.
     MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
