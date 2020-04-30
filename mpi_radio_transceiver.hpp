@@ -210,7 +210,11 @@ private:
 
     template<size_t N>
     static void mpi_listener(MPIRadioTransceiver* trxs) {
-        // TODO check to make sure N is larger than 0, otherwise exit with cerr
+        // Checks to make sure N is larger than 0, otherwise exit with cerr.
+        if (N <= 0) {
+            std::cerr << "Number of transceivers must be positive." << std::endl;
+            return;
+        }
 
         // mpi stats
         int rank = trxs[0].m_rank;
