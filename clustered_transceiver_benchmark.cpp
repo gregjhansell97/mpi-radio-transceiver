@@ -83,7 +83,6 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];
         // Setting parameters for transceiver t.
-        t.set_m_id(i);
         loc = generate_point(1, 1, .5);
         t.set_x(loc.first);
         t.set_y(loc.second);
@@ -141,7 +140,8 @@ int main(int argc, char** argv) {
 
     // Reduce the counters into a global counter.
     int global_counter = 0;
-    MPI_Reduce(&counter, &global_counter, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(
+        &counter, &global_counter, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     // Record the world's total # of trxs that received the msg.
     if (rank == 0) {

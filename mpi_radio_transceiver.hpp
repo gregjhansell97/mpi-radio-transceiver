@@ -26,7 +26,6 @@ class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
     const double get_x() { return m_x; };
     const double get_y() { return m_y; };
-    void set_m_id(const size_t id) { m_id = id; };
     void set_x(const double x) { m_x = x; };
     void set_y(const double y) { m_y = y; };
     void set_send_duration(const double sd) { m_send_duration = sd; };

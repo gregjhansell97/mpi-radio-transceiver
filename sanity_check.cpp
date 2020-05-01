@@ -48,10 +48,9 @@ int main(int argc, char** argv) {
     // x-location:  0.....1.....2......3......4
     //            t[0]  t[1]  t[2]   t[3]   t[4]
     // each transceiver is '1' unit away from the others
-    for(int i = 0; i < NUM_TRXS; ++i) {
+    for(size_t i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];
         // setting parameters for t
-        t.set_m_id(i);
         t.set_x(i + 0.01);
         t.set_y(0.0);
         t.set_send_duration(0.0);
