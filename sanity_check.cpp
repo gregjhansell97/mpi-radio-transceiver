@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
         }
         assert(sender.recv(&raw_msg, 0) == 0);
     } else { // another rank make sure messages get received
-        for(int i = 0; i < NUM_TRXS; ++i) {
+        for(size_t i = 0; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
             char* raw_msg;
             // receive data with a certain timeout

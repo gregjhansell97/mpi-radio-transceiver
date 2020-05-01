@@ -138,6 +138,8 @@ int main(int argc, char** argv) {
         }
     }
 
+    // TODO change to MPI I/O single file r/w
+    // Not most efficient but inforporating i/o somehow
     // Reduce the counters into a global counter.
     int global_counter = 0;
     MPI_Reduce(

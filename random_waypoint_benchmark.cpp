@@ -134,13 +134,13 @@ int main(int argc, char** argv) {
     * and runs for a specified duration. At intervals of a pre-defined time
     * step, every transceiver moves following the random waypoint pattern.
     * 
-    * A subset of transceivers periodically transmit data. This data is the
-    * time of transmission. The receivers (which are not the senders, and
+    * A subset of transceivers periodically transmit data. This data is
+    * curr_time. The receivers (which are not the senders, and
     * waiting on separate threads) that are within communication range record
     * the latency for further performance calculation and measures later.
     */
     double start_time; // Simulation start time.
-    double op_time = 0.0; // Time spent on operations, subtracted off.
+    double op_time = 0.0; // Time spent on operations, subtracted off. is this needed?
     double curr_time; // Current time spent in simulation (ms).
 
     // Total elapsed time disregarding time spent on operations.
@@ -169,24 +169,34 @@ int main(int argc, char** argv) {
                 t.set_y(y);
             }
         }
-        // Check if trxs are sending out msgs this time interval
-        if ((int)std::fmod(10000 * curr_time, DATA_PERIOD) == 0) {
-            // Take time up to the hundred-thousandth place for latency calcs.
-            std::string cpp_time =
-                std::to_string(LATENCY_PRECISION * 1000 * curr_time);
-            const char* msg = cpp_time.c_str();
-            if (rank == 0) { // rank 0 sends out 2 msgs
-                auto& t0 = trxs[0];
-                auto& t1 = trxs[1];
-                // std::string cpp_time = std::to_string(curr_time);
-                // const char* c_time = cpp_time.c_str();
-                // cout << "Time: " << curr_time << atoi(c_time) << endl;
+
+        if (rank == 0) { // If rank 0, check if sending out msgs right now
+            if (
+            (int)std::fmod(10000 * (curr_time + op_time), DATA_PERIOD) == 0) {
+                // all rank 0's trxs send out msg of curr_time 
+                for (size_t i = 0; i < NUM_TRXS; ++i) {
+                    auto& t = trxs[i];
+                    // grabs to 100-thousandth place for latency calcs.
+                    // Add back the operations time for true clock time
+                    // edge case rcv threads finished?
+                    std::string cpp_time = std::to_string(MPI_Wtime());
+                    const char* msg = cpp_time.c_str();
+                    cout << "rank0-t" << i << " sent " <<
+                    t0.send(msg, 1 + cpp_time.length, SEND_DELAY) <<
+                    " bytes" << endl;
+                }
+            }
+        } else { // receives on separate threads wait for info
+            for (size_t i = 0; i < NUM_TRXS; ++i) {
+                auto& t = trxs[i];
+                char* raw_msg;
+                // assert(t.recv(&raw_msg, 1000) == sizeof(i));
             }
         }
         // Check 
 
         double op_end = MPI_Wtime(); // Take end time of operations
-        op_time += op_end - op_start; // op_time will miss this (albeit small)
+        op_time += op_end - op_start; // op_time will miss this line (small?)
     }
 
     // TODO accummulate sums and avg across # of transceivers
