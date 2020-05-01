@@ -190,7 +190,7 @@ private:
     int m_rank;
     int m_num_ranks;
 
-    // lister spins up and on a loop of MPI receives until close_mpi_listener
+    // listener spins up and on a loop of MPI receives until close_mpi_listener
     // is called
     static std::thread* mpi_listener_thread;
 
@@ -210,7 +210,11 @@ private:
 
     template<size_t N>
     static void mpi_listener(MPIRadioTransceiver* trxs) {
-        // TODO check to make sure N is larger than 0, otherwise exit with cerr
+        // Checks to make sure N is larger than 0, otherwise exit with cerr.
+        if (N <= 0) {
+            std::cerr << "Number of transceivers must be positive." << std::endl;
+            return;
+        }
 
         // mpi stats
         int rank = trxs[0].m_rank;
@@ -276,15 +280,15 @@ private:
                         continue;
                     }
                     { 
-                        // MPI_MSG BUFFER LOCK
-                        // A potential optimization would be to skip for later 
-                        // if can't get lock:
-                        //    swap it with node at end of list,
-                        //    decrement i and continue;
-                        std::lock_guard<std::mutex> mailbox_lock(
-                                t.m_mailbox_mtx);
-                        t.m_mailbox.push(mpi_msg);
-                        t.m_buffer_size += mpi_msg->size;
+                    // MPI_MSG BUFFER LOCK
+                    // A potential optimization would be to skip for later 
+                    // if can't get lock:
+                    //    swap it with node at end of list,
+                    //    decrement i and continue;
+                    std::lock_guard<std::mutex> mailbox_lock(
+                            t.m_mailbox_mtx);
+                    t.m_mailbox.push(mpi_msg);
+                    t.m_buffer_size += mpi_msg->size;
                     }
                     // SHORT BUSY WAIT
                     while(t.m_receiving) {
