@@ -30,7 +30,8 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-#define FILESIZE 
+#define FILE_SIZE 3000 // change as # trxs/procs scale up
+#define FILE_NAME "latencies.out"
 
 // RANDOM WAYPOINT SIMULATION PARAMS
 #define RAND_SEED 52021
@@ -148,6 +149,8 @@ int main(int argc, char** argv) {
 
     // Total elapsed time disregarding time spent on operations.
     start_time = MPI_Wtime();
+    uint msgs_rcvd = 0; // Track of how many msgs were rcvd/rank
+    std::vector<double> latencies; // Track all latencies for perf metrics
     // Prefer ms for data transmission period and time steps.
     while ( 1000 * (curr_time = MPI_Wtime() - start_time - op_time)
         < SIMULATION_DURATION) {
@@ -173,37 +176,42 @@ int main(int argc, char** argv) {
             }
         }
 
-        uint msgs_rcvd = 0; // Track of how many msgs were rcvd/rank
-        std::vector<double> latencies; // Track all latencies for perf metrics
-        if (rank == 0) { // If rank 0, check if sending out msgs right now
-            if (
-            (int)std::fmod(10000 * (curr_time + op_time), DATA_PERIOD) == 0) {
-                // all rank 0's trxs send out msg of curr_time 
-                for (size_t i = 0; i < NUM_TRXS; ++i) {
-                    auto& t = trxs[i];
-                    // grabs to 100-thousandth place for latency calcs.
-                    // Add back the operations time for true clock time
-                    // edge case rcv threads finished?
-                    std::string cpp_time = std::to_string(MPI_Wtime());
-                    const char* msg = cpp_time.c_str();
-                    cout << "rank0-t" << i << " sent " <<
-                    t.send(msg, 13, SEND_DELAY) <<
-                    " bytes" << endl;
-                }
+        // check if sending out msgs right now
+        if (
+        (int)std::fmod(10000 * (curr_time + op_time), DATA_PERIOD) == 0) {
+            // all rank's trx[0] send out msg of curr_time
+            
+            for (size_t i = 0; i < NUM_TRXS; ++i) {
+                auto& t = trxs[i];
+                // grabs to 100-thousandth place for latency calcs.
+                // Add back the operations time for true clock time
+                // edge case rcv threads finished?
+                std::string cpp_time = std::to_string(MPI_Wtime());
+                const char* msg = cpp_time.c_str();
+                cout << "rank0-t" << i << " sent " <<
+                t.send(msg, 13, SEND_DELAY) <<
+                " bytes" << endl;
             }
+        }
         } else { // receives on separate threads wait for info
             for (size_t i = 0; i < NUM_TRXS; ++i) {
                 auto& t = trxs[i];
                 char* raw_msg;
-                // Waiting for msg w/ timeout
-                size_t bytes = t.recv(&raw_msg, 10);
+                // wait for msg w/ timeout
+                size_t bytes = t.recv(&raw_msg, 0);
                 if (bytes == 13) { // you've got mail!
                     // grab time immediately after recv unblocks
                     double rcvd_time = MPI_Wtime();
                     // individual times needed for median calcs
                     latencies.push_back(rcvd_time - atof(raw_msg));
                     msgs_rcvd++;
-                    assert(t.recv(&raw_msg, 0) == 0); // No other info rcvd
+                    std::cout << "first: rank" << rank << "trx" <<
+                    i << " rcvd " << raw_msg;
+                    if ((bytes = t.recv(&raw_msg, 0)) != 0) {
+                        std::cout << " second: rank" << rank << "trx" <<
+                        i << " rcvd " << raw_msg << endl;
+                        exit(-1);
+                    } // No other info rcvd
                 } else { // No other info rcvd
                     assert(bytes == 0);
                 }
@@ -213,10 +221,29 @@ int main(int argc, char** argv) {
         op_time += op_end - op_start; // op_time will miss this line (small?)
     }
 
-    if (rank != 0) { // Receiving ranks write # msgs and latencies to file
-        
+    int global_msgs_rcvd = 0; // amass total # of msgs
+    MPI_Reduce(
+        &msgs_rcvd, // send this rank's # of rcvd msgs
+        &global_msgs_rcvd, // rcv in this var
+        1, // expected # of msgs sent/rank
+        MPI_INT, // msg type
+        MPI_SUM,
+        0, // root rank
+        MPI_COMM_WORLD
+    );
+    // TODO optimization: collective i/o only rank 1 writes to file
+    MPI_File fh; // file ptr to latencies
+    if (rank != 0) { // rcving ranks write latencies to file
+        int bufsize = FILE_SIZE/(num_ranks - 1); // data chunk available/rank
+        for (const auto& l : latencies) {
+            MPI_File_open(
+                MPI_COMM_WORLD, FILE_NAME,
+                MPI_MODE_CREATE|MPI_MODE_WRONLY,
+                MPI_INFO_NULL, &fh
+            );
+            // MPI_File_write_at(fh, rank * bufsize, )
+        }
     }
-    // All ranks write total msg_counter and latencies ds to file
     MPI_Barrier(MPI_COMM_WORLD);
     cout << "TEST SUCCEEDED!" << endl;
     // rank0 reads from file, min/max-heap median, avg, std dev
