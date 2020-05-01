@@ -30,9 +30,12 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
+#define FILESIZE 
+
+// RANDOM WAYPOINT SIMULATION PARAMS
 #define RAND_SEED 52021
 #define MAP_SIZE 1000 // Square world with no wrap-around.
-#define NUM_TRXS 4
+#define NUM_TRXS 2
 #define MAX_BUFFER_SIZE 2048   // bytes
 #define SIMULATION_DURATION  5 // s
 #define TIME_STEP 100          // interval between transceiver moves
@@ -170,6 +173,8 @@ int main(int argc, char** argv) {
             }
         }
 
+        uint msgs_rcvd = 0; // Track of how many msgs were rcvd/rank
+        std::vector<double> latencies; // Track all latencies for perf metrics
         if (rank == 0) { // If rank 0, check if sending out msgs right now
             if (
             (int)std::fmod(10000 * (curr_time + op_time), DATA_PERIOD) == 0) {
@@ -191,11 +196,16 @@ int main(int argc, char** argv) {
                 auto& t = trxs[i];
                 char* raw_msg;
                 // Waiting for msg w/ timeout
-                if (t.recv(&raw_msg, 1000) == 13) { // you've got mail!
+                size_t bytes = t.recv(&raw_msg, 10);
+                if (bytes == 13) { // you've got mail!
                     // grab time immediately after recv unblocks
                     double rcvd_time = MPI_Wtime();
-                    // TODO calc & store int latency and msgs_rcvd count
-                    double latency = rcvd_time - atof(raw_msg);
+                    // individual times needed for median calcs
+                    latencies.push_back(rcvd_time - atof(raw_msg));
+                    msgs_rcvd++;
+                    assert(t.recv(&raw_msg, 0) == 0); // No other info rcvd
+                } else { // No other info rcvd
+                    assert(bytes == 0);
                 }
             }
         }
@@ -203,8 +213,12 @@ int main(int argc, char** argv) {
         op_time += op_end - op_start; // op_time will miss this line (small?)
     }
 
+    if (rank != 0) { // Receiving ranks write # msgs and latencies to file
+        
+    }
     // All ranks write total msg_counter and latencies ds to file
     MPI_Barrier(MPI_COMM_WORLD);
+    cout << "TEST SUCCEEDED!" << endl;
     // rank0 reads from file, min/max-heap median, avg, std dev
     // output to screen?
     // TODO min/max-heap find median from stream of data
