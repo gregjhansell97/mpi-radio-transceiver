@@ -34,14 +34,15 @@ using std::endl;
 #define MAP_SIZE 1000 // Square world with no wrap-around.
 #define NUM_TRXS 4
 #define MAX_BUFFER_SIZE 2048   // bytes
-#define SIMULATION_DURATION 15 // iteration count
-#define TIME_STEP 3          // interval between transceiver moves
-#define DATA_PERIOD 2         // Intervals of data transmission.
+#define SIMULATION_DURATION  5 // s
+#define TIME_STEP 30          // interval between transceiver moves
+#define DATA_PERIOD 20         // Intervals btw data transmission
 #define COMM_RANGE 125     // send and recv ranges.
-#define SEND_DELAY 0.01    // ms
-#define RECV_DELAY 0.001    // ms
+#define SEND_DELAY .01    // ms
+#define RECV_DELAY .001    // ms
 #define SPEED_MAX 20
 #define SPEED_MIN 10
+#define LATENCY_PRECISION 100000 // decimal places to measure latency
 
 // Singular component making up a trx's path.
 typedef struct Point {
@@ -68,7 +69,7 @@ typedef struct Point {
     std::uniform_real_distribution<> dis_sp(SPEED_MIN, SPEED_MAX);
     // Populate the Path at a random point in time for the entirety simulation
     // duration.
-    while (path.back().time <= SIMULATION_DURATION + TIME_STEP) {
+    while (path.back().time <= (SIMULATION_DURATION * 1000) + TIME_STEP) {
         double speed = dis_sp(gen);
         const Point prev = path.back();
         double next_x = dis_loc(gen);
@@ -138,17 +139,19 @@ int main(int argc, char** argv) {
     * waiting on separate threads) that are within communication range record
     * the latency for further performance calculation and measures later.
     */
-    int start_time; // Simulation start time.
-    int op_time = 0; // Time spent on operations, subtracted off.
-    int curr_time; // Current time spent in simulation.
-    start_time = MPI_Wtime();
+    double start_time; // Simulation start time.
+    double op_time = 0.0; // Time spent on operations, subtracted off.
+    double curr_time; // Current time spent in simulation (ms).
+
     // Total elapsed time disregarding time spent on operations.
-    while ( (curr_time = MPI_Wtime() - start_time - op_time)
+    start_time = MPI_Wtime();
+    // Prefer ms for data transmission period and time steps.
+    while ( 1000 * (curr_time = MPI_Wtime() - start_time - op_time)
         < SIMULATION_DURATION) {
-        // Keep track of elapsed time in single operation.
         double op_start = MPI_Wtime();
         // Check if trxs are moving this time interval
-        if (curr_time % TIME_STEP == 0) { // All trxs are moving!
+        if ((int)std::fmod(10000 * curr_time, TIME_STEP) == 0) {
+            // All trxs are moving!
             for (size_t i = 0; i < NUM_TRXS; ++i) {
                 std::deque<Point> path = trx_to_path.at(i);
                 Point p1 = path[1];
@@ -157,7 +160,7 @@ int main(int argc, char** argv) {
                     p1 = path[1];
                 }
                 Point p0 = path.front();
-                double offset = (double)(curr_time - p0.time)/(p1.time - p0.time);
+                double offset = (curr_time - p0.time)/(p1.time - p0.time);
                 double x = p0.x + offset * (p1.x - p0.x);
                 double y = p0.y + offset * (p1.y - p0.y);
                 // Access trx corresponding with this move and set new loc
@@ -167,9 +170,20 @@ int main(int argc, char** argv) {
             }
         }
         // Check if trxs are sending out msgs this time interval
-        if (curr_time % DATA_PERIOD == 0) { // trxs 0 and 1 send out curr time
-            
+        if ((int)std::fmod(10000 * curr_time, DATA_PERIOD) == 0) {
+            // Take time up to the hundred-thousandth place for latency calcs.
+            std::string cpp_time =
+                std::to_string(LATENCY_PRECISION * 1000 * curr_time);
+            const char* msg = cpp_time.c_str();
+            if (rank == 0) { // rank 0 sends out 2 msgs
+                auto& t0 = trxs[0];
+                auto& t1 = trxs[1];
+                // std::string cpp_time = std::to_string(curr_time);
+                // const char* c_time = cpp_time.c_str();
+                // cout << "Time: " << curr_time << atoi(c_time) << endl;
+            }
         }
+        // Check 
 
         double op_end = MPI_Wtime(); // Take end time of operations
         op_time += op_end - op_start; // op_time will miss this (albeit small)
