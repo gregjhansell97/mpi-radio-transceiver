@@ -35,8 +35,8 @@ using std::endl;
 #define NUM_TRXS 4
 #define MAX_BUFFER_SIZE 2048   // bytes
 #define SIMULATION_DURATION  5 // s
-#define TIME_STEP 30          // interval between transceiver moves
-#define DATA_PERIOD 20         // Intervals btw data transmission
+#define TIME_STEP 100          // interval between transceiver moves
+#define DATA_PERIOD 180         // Intervals btw data transmission
 #define COMM_RANGE 125     // send and recv ranges.
 #define SEND_DELAY .01    // ms
 #define RECV_DELAY .001    // ms
@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
                     std::string cpp_time = std::to_string(MPI_Wtime());
                     const char* msg = cpp_time.c_str();
                     cout << "rank0-t" << i << " sent " <<
-                    t0.send(msg, 1 + cpp_time.length, SEND_DELAY) <<
+                    t.send(msg, 13, SEND_DELAY) <<
                     " bytes" << endl;
                 }
             }
@@ -190,25 +190,26 @@ int main(int argc, char** argv) {
             for (size_t i = 0; i < NUM_TRXS; ++i) {
                 auto& t = trxs[i];
                 char* raw_msg;
-                // assert(t.recv(&raw_msg, 1000) == sizeof(i));
+                // Waiting for msg w/ timeout
+                if (t.recv(&raw_msg, 1000) == 13) { // you've got mail!
+                    // grab time immediately after recv unblocks
+                    double rcvd_time = MPI_Wtime();
+                    // TODO calc & store int latency and msgs_rcvd count
+                    double latency = rcvd_time - atof(raw_msg);
+                }
             }
         }
-        // Check 
-
         double op_end = MPI_Wtime(); // Take end time of operations
         op_time += op_end - op_start; // op_time will miss this line (small?)
     }
 
-    // TODO accummulate sums and avg across # of transceivers
-    double sum_of_all_latencies = 0;
+    // All ranks write total msg_counter and latencies ds to file
+    MPI_Barrier(MPI_COMM_WORLD);
+    // rank0 reads from file, min/max-heap median, avg, std dev
+    // output to screen?
     // TODO min/max-heap find median from stream of data
-    // TODO create arr of latency sums[NUM_TRXS] and msg_counter per rank
-    /**
-     * Close transceivers and sync information across ranks.
-     * Calculate average, median, and std dev latencies across all trxs in all
-     * ranks, which are output to files for debug and performance analysis.
-     */
-    // TODO MPI I/O write 
+    // TODO stddev streaming fxn
+    // TODO create ds of latencies and msg_counter per rank
     MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
     MPI_Finalize();
     return 0;
