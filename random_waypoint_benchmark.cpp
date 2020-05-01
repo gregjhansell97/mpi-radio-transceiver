@@ -6,19 +6,7 @@ Description:
   waypoint model.
 Usage:
   mpic++ ./random_waypoint_benchmark.cpp -o run.exe -std=c++11
-  ./run.exe \
-    <random-seed> \
-    <map-size> \
-    <# of trxs/rank> \
-    <buffer size/trx (bytes)> \
-    <simulation duration (ms)> \
-    <time-step to adjust velocity (ms)> \
-    <period of transmitted data> \
-    <communication range/each trx> \
-    <send time delay/trx (ms)> \
-    <rcv time delay/trx (ms)> \
-    <lower bound on trx move speed (m/s)> \
-    <upper bound on trx move speed (m/s)>
+  ./run.exe
 */
 
 // C/C++libraries
@@ -145,12 +133,17 @@ int main(int argc, char** argv) {
     * step, every transceiver moves following the random waypoint pattern.
     * 
     * 
-    */  
+    */
+    // TODO accummulate sums and avg across # of transceivers
+    double sum_of_all_latencies = 0;
 
-    // Shuts down all transceivers.
+    /**
+     * Close transceivers and sync information across ranks.
+     * Calculate average, median, and std dev latencies across all trxs in all
+     * ranks, which are output to files for debug and performance analysis.
+     */
+    // TODO MPI I/O write 
     MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
-
-    // Synchronize MPI ranks.
     MPI_Finalize();
     return 0;
 }
