@@ -21,27 +21,27 @@
 
 
 // B is the max-buffer-size
-template<size_t B>
+// P is packet size
+// L is latency in milliseconds
+template<size_t B, size_t P, size_t L>
 class MPIRadioTransceiver : public hmap::interface::Communicator {
 public:
     const double get_x() { return m_x; };
     const double get_y() { return m_y; };
     void set_x(const double x) { m_x = x; };
     void set_y(const double y) { m_y = y; };
-    void set_send_duration(const double sd) { m_send_duration = sd; };
-    void set_recv_duration(const double rd) { m_recv_duration = rd; };
     void set_send_range(const double r) { m_send_range = r; };
     void set_recv_range(const double r) { m_recv_range = r; };
    
     ssize_t send(
-            const char* data, const size_t size, const int timeout) override {
-        if(size > B) {
+            const char* data, const size_t size, const double timeout) override {
+        if(size > P) {
             return Communicator::error;
         }
 
         MPIMsg mpi_msg {m_rank, m_id, m_x, m_y, m_send_range, size};
         // (dest, src, n):
-        memcpy(mpi_msg.data, data, B);
+        memcpy(mpi_msg.data, data, P);
 
         // iterate through all ranks and send data
         // NOTE MPI_Bcast does not work for this because you need to know the 
@@ -54,7 +54,7 @@ public:
         return size;
     }
 
-    ssize_t recv(char** data, const int timeout) {
+    ssize_t recv(char** data, const double timeout) {
         m_receiving = true;
         if(m_mailbox.empty()) {
             // wait for mailbox to not be empty
@@ -62,7 +62,7 @@ public:
             std::unique_lock<std::mutex> lk(mtx);
             m_mailbox_flag.wait_for(
                     lk, // lock to block on  
-                    std::chrono::milliseconds(timeout), // time to wait on
+                    std::chrono::milliseconds((int)(timeout*1000.0)), // time to wait on
                     [this]{ return !m_mailbox.empty(); }); // wait till data
         }
         m_receiving = false;
@@ -97,9 +97,6 @@ public:
     template<size_t N>
     static MPIRadioTransceiver* transceivers() {
         // confirm proper thread support is available
-        if(MPI_WTIME_IS_GLOBAL) {
-            std::cout << "YAYAYAY" << std::endl;
-        }
         int provided_thread_support;
         MPI_Query_thread(&provided_thread_support);
         if(provided_thread_support != MPI_THREAD_MULTIPLE) {
@@ -165,7 +162,7 @@ private:
         double send_x, send_y; //location of sending transceiver
         double send_range; // how far sending transceiver can send
         size_t size; // how much data is there
-        char data[B]; // message contents
+        char data[P]; // message contents
     } MPIMsg;
 
     // Identifier unique to each transceiver.
@@ -175,8 +172,6 @@ private:
     // transceiver parameters
     double m_x;
     double m_y;
-    double m_send_duration;
-    double m_recv_duration;
     double m_send_range;
     double m_recv_range;
 
@@ -186,7 +181,7 @@ private:
     std::mutex m_mailbox_mtx;
     bool m_receiving = false;
     size_t m_buffer_size = 0;
-    char m_rcvd[B];
+    char m_rcvd[P];
     std::condition_variable m_mailbox_flag; 
 
     // MPI meta information
@@ -304,7 +299,7 @@ private:
     }
 };
 
-template<size_t B>
-std::thread* MPIRadioTransceiver<B>::mpi_listener_thread;
+template<size_t B, size_t P, size_t L>
+std::thread* MPIRadioTransceiver<B, P, L>::mpi_listener_thread;
 
 #endif // MPI_RADIO_TRANSCEIVER_HPP

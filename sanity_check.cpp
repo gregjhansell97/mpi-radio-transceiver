@@ -16,7 +16,10 @@ using std::endl;
 
 #define LOCATION_OFFSET 0.02
 #define NUM_TRXS 10 //  number of transceivers per rank
-#define MAX_BUFFER_SIZE 2048
+
+#define BUFFER_SIZE 2048 // buffer gets to full messages dropped
+#define PACKET_SIZE 32 // dont send data past this size
+#define LATENCY 0 // ideal time delay between send and recv
 
 int main(int argc, char** argv) {
     // Initialize MPI Environment
@@ -36,7 +39,10 @@ int main(int argc, char** argv) {
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
-    auto trxs = MPIRadioTransceiver<MAX_BUFFER_SIZE>::transceivers<NUM_TRXS>();
+    auto trxs = MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::transceivers<NUM_TRXS>();
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -53,8 +59,6 @@ int main(int argc, char** argv) {
         // setting parameters for t
         t.set_x(i + 0.01);
         t.set_y(0.0);
-        t.set_send_duration(0.0);
-        t.set_recv_duration(0.0);
         t.set_send_range(0.25);
         t.set_recv_range(0.25);
     }
@@ -78,7 +82,7 @@ int main(int argc, char** argv) {
         for(size_t i = 1; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 1000) == sizeof(i));
+            assert(t.recv(&raw_msg, 1) == sizeof(i));
             int rcvd_msg = *(int*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
@@ -91,7 +95,7 @@ int main(int argc, char** argv) {
             auto& t = trxs[i];
             char* raw_msg;
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 1000)== sizeof(i));
+            assert(t.recv(&raw_msg, 1) == sizeof(i));
             int rcvd_msg = *(int*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
@@ -104,7 +108,10 @@ int main(int argc, char** argv) {
 
     // may need sleep if operations are not blocking and not done yet
     //std::this_thread::sleep_for(std::chrono::seconds(1));
-    MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
+    MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::close_transceivers<NUM_TRXS>(trxs);
 
 
     MPI_Finalize();
