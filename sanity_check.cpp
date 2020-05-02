@@ -22,6 +22,10 @@ using std::endl;
 #define LATENCY 0 // ideal time delay between send and recv
 
 int main(int argc, char** argv) {
+    if(!MPI_WTIME_IS_GLOBAL) {
+        cerr << "Unable to initialize, wall clock time needs to be global" << endl;
+        return 1;
+    }
     // Initialize MPI Environment
     int provided_thread_support;
     int ret = MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided_thread_support);

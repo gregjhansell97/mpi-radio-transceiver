@@ -39,50 +39,89 @@ public:
             return Communicator::error;
         }
 
-        MPIMsg mpi_msg {m_rank, m_id, m_x, m_y, m_send_range, size};
+        MPIMsg mpi_msg {m_rank, m_id, m_x, m_y, m_send_range, MPI_Wtime(), false, size};
         // (dest, src, n):
         memcpy(mpi_msg.data, data, P);
 
         // iterate through all ranks and send data
         // NOTE MPI_Bcast does not work for this because you need to know the 
         // root of the broadcaster ( all nodes are currently)
-        for(size_t i = 0; i < m_num_ranks; ++i) {
-            MPI_Send(
-                    &mpi_msg, sizeof(MPIMsg), MPI_BYTE, 
-                    i, RECV_CHANNEL, MPI_COMM_WORLD);
+        m_last_send_time = MPI_Wtime();
+        int status = MPI_Send(&mpi_msg, sizeof(MPIMsg), MPI_BYTE, 
+                0, 0, MPI_COMM_WORLD);
+        
+        double fixed_time = MPI_Wtime();
+        double current_time;
+        double sleep = (L/1000.0);
+        while(sleep > 0.0) {
+            current_time = MPI_Wtime();
+            std::this_thread::sleep_for(std::chrono::milliseconds((size_t)(sleep*1000)));
+            sleep -= (MPI_Wtime() - current_time);
         }
         return size;
     }
 
     ssize_t recv(char** data, const double timeout) {
-        m_receiving = true;
-        if(m_mailbox.empty()) {
-            // wait for mailbox to not be empty
-            std::mutex mtx;
-            std::unique_lock<std::mutex> lk(mtx);
-            m_mailbox_flag.wait_for(
-                    lk, // lock to block on  
-                    std::chrono::milliseconds((int)(timeout*1000.0)), // time to wait on
-                    [this]{ return !m_mailbox.empty(); }); // wait till data
-        }
-        m_receiving = false;
-        if(!m_mailbox.empty()) { // mpi-message available
-            auto& mpi_msg = m_mailbox.front();
-            const size_t data_size = mpi_msg->size;
-            memcpy(m_rcvd, mpi_msg->data, mpi_msg->size);
-            {
-                // remove item from mailbox and adjust size
-                std::lock_guard<std::mutex> mailbox_lock(m_mailbox_mtx); 
-                m_buffer_size -= mpi_msg->size;
-                m_mailbox.pop(); // remove item from mail
+        double sleep = timeout;
+        double current_time = MPI_Wtime();
+        while(sleep >= 0) {
+            m_receiving = true;
+            if(m_mailbox.empty()) {
+                // wait for mailbox to not be empty
+                std::mutex mtx;
+                std::unique_lock<std::mutex> lk(mtx);
+                m_mailbox_flag.wait_for(
+                        lk, // lock to block on 
+                        std::chrono::milliseconds((int)(sleep*1000.0)),
+                        [this]{ return !m_mailbox.empty(); }); // wait till data
             }
-            *data = m_rcvd;
-            return data_size;
-        } else {
-            // not message was received, timeout must have been hit
-            *data = nullptr;
-            return 0; // nothing in buffer and timeout reached
+
+            m_receiving = false;
+            // decrement amount of sleep remaining
+            sleep -= (MPI_Wtime() - current_time);
+            current_time = MPI_Wtime(); // reset current time
+            if(!m_mailbox.empty()) { // mpi-message available
+                const double next_recv_time = m_mailbox.front()->send_time + L/1000.0;
+                if(current_time < next_recv_time) {
+                    // need to wait
+                    const double delay = next_recv_time - current_time;
+                    if(delay > sleep) { // not enough time
+                        break;
+                    } else {
+                        // sleep for the delay
+                        std::this_thread::sleep_for(std::chrono::milliseconds(
+                                    (int)(delay*1000.0)));
+                    }
+                }
+                // if I got to here, I can remove message
+                auto mpi_msg = m_mailbox.front();
+                const size_t data_size = mpi_msg->size;
+                memcpy(m_rcvd, mpi_msg->data, std::min(mpi_msg->size, P));
+                {
+                    // remove item from mailbox and adjust size
+                    std::lock_guard<std::mutex> mailbox_lock(m_mailbox_mtx); 
+                    m_buffer_size -= mpi_msg->size;
+                    m_mailbox.pop(); // remove item from mail
+                }
+                if(mpi_msg->interference) {
+                    // interference
+                    sleep -= (MPI_Wtime() - current_time); 
+                } else {
+                    // not interference, message received successfully
+                    *data = m_rcvd;
+                    return data_size;
+                }
+            }
         }
+
+        // ran out of time
+        // sleep for remainder of time
+        if(sleep > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(
+                        (int)(sleep*1000.0)));
+        }
+        *data = nullptr;
+        return 0;
     }
 
     void close() override { }
@@ -131,15 +170,17 @@ public:
      */
     template<size_t N>
     static void close_transceivers(MPIRadioTransceiver* trxs) {
+        MPI_Barrier(MPI_COMM_WORLD); // wait till all ranks want to close
         // this is where the close message is sent
         // MPI meta information
         int rank = 0;
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
         // 0 is for success (only option atm)
-        char closing_status = 0;
-        MPI_Send(
-                &closing_status, 1, MPI_BYTE, 
-                rank, CLOSE_CHANNEL, MPI_COMM_WORLD);
+        if(rank == 0) {
+            MPIMsg poison_pill {0, 0, 0, 0, 0, 0};
+            MPI_Send(&poison_pill, sizeof(MPIMsg), MPI_BYTE,
+                    0, 0, MPI_COMM_WORLD);
+        }
 
         // block until mpi_listener_thread dies
         mpi_listener_thread->join();
@@ -161,6 +202,8 @@ private:
         size_t sender_id; // unique id (in the scope of rank)
         double send_x, send_y; //location of sending transceiver
         double send_range; // how far sending transceiver can send
+        double send_time;
+        bool interference; // did message get flagged as interference
         size_t size; // how much data is there
         char data[P]; // message contents
     } MPIMsg;
@@ -180,6 +223,7 @@ private:
     std::queue<std::shared_ptr<MPIMsg>> m_mailbox; // where MPIMsgs are put
     std::mutex m_mailbox_mtx;
     bool m_receiving = false;
+    double m_last_send_time = -(L/1000.0);
     size_t m_buffer_size = 0;
     char m_rcvd[P];
     std::condition_variable m_mailbox_flag; 
@@ -216,88 +260,103 @@ private:
 
         // mpi stats
         int rank = trxs[0].m_rank;
-
-        // set up Irecv requests
-        const int RECV_INDEX = 0; // index for recv requests
-        const int CLOSE_INDEX = 1; // index for close requests
-        // Two types of requests: recv-requests and close-requests
-        MPI_Request requests[2];
-
-        // MPI received meta information
         MPI_Status status; // was the receive successful?
-        char close_status = 0; // was the close clean?
-        int channel; // the channel that became unblocked
-        // Set up a non-blocking receive for the thread ending
-        MPI_Irecv(
-            &close_status, // was the close clean?
-            1, // the close status is a 1-byte piece of data
-            MPI_BYTE, // type of data being received
-            rank, // the process will be receiving it from itself
-            CLOSE_CHANNEL, 
-            MPI_COMM_WORLD, // mpi-communicator used
-            &requests[CLOSE_INDEX]); // request to block later on
+
         while(true) {
             // create a new shared pointer
-            std::shared_ptr<MPIMsg> mpi_msg = 
-                std::make_shared<MPIMsg>();
-            // receive data
-            MPI_Irecv(
-                mpi_msg.get(), // would-be received data
-                sizeof(MPIMsg), // max size the received data can be
-                MPI_BYTE, // type of data being received
-                MPI_ANY_SOURCE, // Source of data being received
-                RECV_CHANNEL, 
-                MPI_COMM_WORLD, // mpi-communicator used
-                &requests[RECV_INDEX]); // return to block later on
-            MPI_Waitany(2, requests, &channel, &status);
-            if(channel == CLOSE_CHANNEL) {
-                // the rank is ending
-                // do any clean-up here
+            std::shared_ptr<MPIMsg> mpi_msg = std::make_shared<MPIMsg>();
+            if(rank == 0) {
+                // waiting on messages
+                MPI_Recv(
+                        mpi_msg.get(),
+                        sizeof(MPIMsg),
+                        MPI_BYTE,
+                        MPI_ANY_SOURCE, // recv channel
+                        0,
+                        MPI_COMM_WORLD,
+                        &status);
+                // send to rest of group
+                MPI_Bcast(
+                        mpi_msg.get(),
+                        sizeof(MPIMsg),
+                        MPI_BYTE,
+                        0,
+                        MPI_COMM_WORLD);
+                //mpi_msg->send_time = MPI_Wtime();
+            } else {
+                // rest of group receives
+                MPI_Bcast(
+                        mpi_msg.get(),
+                        sizeof(MPIMsg),
+                        MPI_BYTE,
+                        0,
+                        MPI_COMM_WORLD);
+                //mpi_msg->send_time = MPI_Wtime();
+            }
+            if(mpi_msg->size == 0) {
+                // indicates the process should exit
                 break;
-            } else if(channel == RECV_CHANNEL) {
-                // Iterate through transceivers and load their mailboxes
-                // with new the new message (if it pertains to them)
-                for(size_t i = 0; i < N; ++i) {
-                    auto& t = trxs[i];
-                    // Check if mpi_msg buffer is maxed out; if so, 
-                    // drop message. If the sender is itself, drop message.
-                    if (t.m_buffer_size + mpi_msg->size > B) {
-                        std::cerr << "message too large" << std::endl;
-                        std::cerr << mpi_msg->size << std::endl;
-                        continue;
-                    } else if(mpi_msg->sender_rank == t.m_rank && 
-                            mpi_msg->sender_id == t.m_id) {
-                        continue;
-                    }
-                    // calculate distance
-                    const double mag = mpi_msg->send_range + t.m_recv_range;
-                    const double dx = mpi_msg->send_x - t.m_x;
-                    const double dy = mpi_msg->send_y - t.m_y;
-                    if(mag*mag < dx*dx + dy*dy) {
-                        // nodes too far away
-                        continue;
-                    }
-                    { 
-                        // MPI_MSG BUFFER LOCK
-                        // A potential optimization would be to skip for later 
-                        // if can't get lock:
-                        //    swap it with node at end of list,
-                        //    decrement i and continue;
-                        std::lock_guard<std::mutex> mailbox_lock(
-                                t.m_mailbox_mtx);
-                        t.m_mailbox.push(mpi_msg);
+            }
+            for(size_t i = 0; i < N; ++i) {
+                auto& t = trxs[i];
+                // Check if mpi_msg buffer is maxed out; if so, 
+                // drop message. If the sender is itself, drop message.
+                if (t.m_buffer_size + mpi_msg->size > B) {
+                    // BUFFER OVERFLOW
+                    continue;
+                } else if(mpi_msg->sender_rank == t.m_rank && 
+                        mpi_msg->sender_id == t.m_id) {
+                    continue;
+                }
+                // calculate distance
+                const double mag = mpi_msg->send_range + t.m_recv_range;
+                const double dx = mpi_msg->send_x - t.m_x;
+                const double dy = mpi_msg->send_y - t.m_y;
+                if(mag*mag < dx*dx + dy*dy) {
+                    // nodes too far away
+                    continue;
+                }
+                { 
+                    // MPI_MSG BUFFER LOCK
+                    // A potential optimization would be to skip for later 
+                    // if can't get lock:
+                    //    swap it with node at end of list,
+                    //    decrement i and continue;
+                    std::lock_guard<std::mutex> mailbox_lock(
+                            t.m_mailbox_mtx);
+                    // check for interference:
+                    // s                 s + L
+                    // |-----------------|            
+                    //          |---------------------|
+                    if(!t.m_mailbox.empty() &&
+                            mpi_msg->send_time - t.m_mailbox.front()->send_time < (L/(1000.0))) {
+                        std::cout << "INTERFERENCE" << std::endl;
+                        //std::cout << mpi_msg->send_time - t.m_mailbox.front()->send_time << std::endl;
+                        // interference!
+                        // grow buffer
+                        t.m_buffer_size += mpi_msg->size; 
+                        // grow leading msg size in mail to absorb other msg
+                        t.m_mailbox.front()->size += mpi_msg->size;
+                        // set leading msg pointer to have interference
+                        t.m_mailbox.front()->interference = true; // 
+                    } else {
+                        // there is interference if a node receives a message
+                        // when it is sending a message
+                        mpi_msg->interference = (t.m_last_send_time + (L/1000.0) > MPI_Wtime());
                         t.m_buffer_size += mpi_msg->size;
+                        t.m_mailbox.push(mpi_msg);
                     }
-                    // SHORT BUSY WAIT
-                    while(t.m_receiving) {
-                        // ends any blocking mutexes
-                        t.m_mailbox_flag.notify_all();
-                    }
+                }
+                // SHORT BUSY WAIT
+                while(t.m_receiving) {
+                    // ends any blocking mutexes
+                    t.m_mailbox_flag.notify_all();
                 }
             }
         }
     }
 };
+
 
 template<size_t B, size_t P, size_t L>
 std::thread* MPIRadioTransceiver<B, P, L>::mpi_listener_thread;
