@@ -28,9 +28,13 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
+// TRXS INIT PARAMS
+#define BUFFER_SIZE 2048   // bytes
+#define PACKET_SIZE 32 // don't send data past this size
+#define LATENCY 0 // mock time delay between send and rcv
+
 #define _USE_MATH_DEFINES
 #define SND_RCV_RANGE 2
-#define MAX_BUFFER_SIZE 2048
 #define NUM_TRXS 1000
 #define RECV_TIMEOUT_MS 50
 
@@ -69,7 +73,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    auto trxs = MPIRadioTransceiver<MAX_BUFFER_SIZE>::transceivers<NUM_TRXS>();
+    auto trxs = MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::transceivers<NUM_TRXS>();
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -86,8 +93,6 @@ int main(int argc, char** argv) {
         loc = generate_point(1, 1, .5);
         t.set_x(loc.first);
         t.set_y(loc.second);
-        t.set_send_duration(0.0);
-        t.set_recv_duration(0.0);
         t.set_send_range(SND_RCV_RANGE);
         t.set_recv_range(SND_RCV_RANGE);
     }
@@ -138,9 +143,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    // TODO change to MPI I/O single file r/w
-    // Not most efficient but inforporating i/o somehow
-    // Reduce the counters into a global counter.
     int global_counter = 0;
     MPI_Reduce(
         &counter, &global_counter, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
@@ -152,7 +154,10 @@ int main(int argc, char** argv) {
     }
 
     // Shuts down all transceivers.
-    MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
+    MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::close_transceivers<NUM_TRXS>(trxs);
 
     // Synchronize MPI ranks.
     MPI_Finalize();

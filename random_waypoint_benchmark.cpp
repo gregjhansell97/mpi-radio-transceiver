@@ -10,6 +10,7 @@ Usage:
 */
 
 // C/C++libraries
+#include <algorithm>
 #include <assert.h>
 #include <chrono>
 #include <condition_variable>
@@ -17,6 +18,7 @@ Usage:
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <numeric>
 #include <random>
 #include <thread>
 
@@ -30,11 +32,19 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-#define RAND_SEED 52021
+// #define FILE_SIZE 120000 // change as # trxs/procs scale up
+#define FILE_NAME "latencies.txt"
+
+// TRXS INIT PARAMS
+#define BUFFER_SIZE 2048   // bytes
+#define PACKET_SIZE 32 // don't send data past this size
+#define LATENCY 0 // mock time delay between send and rcv
+
+// RANDOM WAYPOINT SIMULATION PARAMS
+#define RAND_SEED 52021 // keeps rand way-point paths consistently random
 #define MAP_SIZE 1000 // Square world with no wrap-around.
-#define NUM_TRXS 4
-#define MAX_BUFFER_SIZE 2048   // bytes
-#define SIMULATION_DURATION  5 // s
+#define NUM_TRXS 2 // trxs/rank
+#define SIMULATION_DURATION  2 // s
 #define TIME_STEP 100          // interval between transceiver moves
 #define DATA_PERIOD 180         // Intervals btw data transmission
 #define COMM_RANGE 125     // send and recv ranges.
@@ -84,6 +94,9 @@ typedef struct Point {
  }
 
 int main(int argc, char** argv) {
+    // ========================================================================
+    // ENVIRONMENT SETUP
+    // ========================================================================
     // Initializes MPI environment.
     int prov;
     int ret = MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &prov);
@@ -104,7 +117,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    auto trxs = MPIRadioTransceiver<MAX_BUFFER_SIZE>::transceivers<NUM_TRXS>();
+    auto trxs = MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::transceivers<NUM_TRXS>();
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -122,13 +138,14 @@ int main(int argc, char** argv) {
         auto& t = trxs[i];
         t.set_send_range(COMM_RANGE);
         t.set_recv_range(COMM_RANGE);
-        t.set_send_duration(SEND_DELAY);
-        t.set_recv_duration(RECV_DELAY);
     }
 
     // Make sure all ranks' transceivers initialized before proceeding.
     MPI_Barrier(MPI_COMM_WORLD);
 
+    // ========================================================================
+    // SIMULATION START
+    // ========================================================================
     /**
     * This test places all the transceivers on a finitely-sized world, and
     * and runs for a specified duration. At intervals of a pre-defined time
@@ -145,6 +162,8 @@ int main(int argc, char** argv) {
 
     // Total elapsed time disregarding time spent on operations.
     start_time = MPI_Wtime();
+    uint msgs_rcvd = 0; // Track of how many msgs were rcvd/rank
+    std::vector<double> latencies; // Track all latencies for perf metrics
     // Prefer ms for data transmission period and time steps.
     while ( 1000 * (curr_time = MPI_Wtime() - start_time - op_time)
         < SIMULATION_DURATION) {
@@ -173,44 +192,127 @@ int main(int argc, char** argv) {
         if (rank == 0) { // If rank 0, check if sending out msgs right now
             if (
             (int)std::fmod(10000 * (curr_time + op_time), DATA_PERIOD) == 0) {
-                // all rank 0's trxs send out msg of curr_time 
+                // rank 0's trx[0] send out msg of curr_time 
                 for (size_t i = 0; i < NUM_TRXS; ++i) {
-                    auto& t = trxs[i];
+                    auto& sender = trxs[i];
                     // grabs to 100-thousandth place for latency calcs.
                     // Add back the operations time for true clock time
                     // edge case rcv threads finished?
                     std::string cpp_time = std::to_string(MPI_Wtime());
                     const char* msg = cpp_time.c_str();
-                    cout << "rank0-t" << i << " sent " <<
-                    t.send(msg, 13, SEND_DELAY) <<
-                    " bytes" << endl;
+                    sender.send(msg, 13, SEND_DELAY);
                 }
             }
         } else { // receives on separate threads wait for info
             for (size_t i = 0; i < NUM_TRXS; ++i) {
                 auto& t = trxs[i];
-                char* raw_msg;
-                // Waiting for msg w/ timeout
-                if (t.recv(&raw_msg, 1000) == 13) { // you've got mail!
+                char* raw_msg; // rcv 1msg/trxs
+                // wait for msg
+                size_t bytes = t.recv(&raw_msg, 0);
+                if (bytes == 13) { // you've got mail!
                     // grab time immediately after recv unblocks
-                    double rcvd_time = MPI_Wtime();
-                    // TODO calc & store int latency and msgs_rcvd count
-                    double latency = rcvd_time - atof(raw_msg);
+                    // individual times needed for median calcs
+                    latencies.push_back(MPI_Wtime() - atof(raw_msg));
+                    msgs_rcvd++;
+                    for (size_t j = 1; j < NUM_TRXS; ++j) {
+                        if ((bytes = t.recv(&raw_msg, 0)) == 13) {
+                            latencies.push_back(MPI_Wtime() - atof(raw_msg));
+                            msgs_rcvd++;
+                        }
+                    }
                 }
             }
         }
         double op_end = MPI_Wtime(); // Take end time of operations
         op_time += op_end - op_start; // op_time will miss this line (small?)
     }
+    // ========================================================================
+    // SIMULATION END
+    // ========================================================================
 
-    // All ranks write total msg_counter and latencies ds to file
+    // ========================================================================
+    // METRICS, I/O, & CUDA
+    // ========================================================================
+    // Send msg counts to rank 0
+    uint all_msgs_rcvd[num_ranks-1]; // rank 0 track msgs rcvd by other ranks
+    if (rank != 0) {
+        MPI_Send(&msgs_rcvd, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+    } else {
+        int rcvs[num_ranks - 1];
+        MPI_Request reqs[num_ranks - 1];
+        MPI_Status stats[num_ranks - 1];
+        for (size_t i = 0; i < num_ranks - 1; ++i) {
+            rcvs[i] = MPI_Irecv(&all_msgs_rcvd[i], 1, MPI_INT, i + 1,
+                1, MPI_COMM_WORLD, &reqs[i]);
+        }
+        MPI_Waitall(num_ranks-1, reqs, stats);
+        // Error check all rcv operations were successful.
+        for (size_t i = 0; i < num_ranks - 1; ++i) {
+            if (rcvs[i] != MPI_SUCCESS) {
+                std::cerr << "Receiving latencies  not succesful" << endl;
+                MPIRadioTransceiver<
+                    BUFFER_SIZE,
+                    PACKET_SIZE,
+                    LATENCY>::
+                    close_transceivers<NUM_TRXS>(trxs);
+                MPI_Finalize();
+                return 1;
+            }
+        }
+    }
+
+    // wait for all latencies to be written
     MPI_Barrier(MPI_COMM_WORLD);
-    // rank0 reads from file, min/max-heap median, avg, std dev
-    // output to screen?
-    // TODO min/max-heap find median from stream of data
-    // TODO stddev streaming fxn
-    // TODO create ds of latencies and msg_counter per rank
-    MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
+
+    // METRICS
+    // - average, min, and max latencies
+    // know from msg counts size of incoming #s from each rank
+    double sum_latencies = 0.0; // rank's summed latencies
+    double global_sum_latencies; // global latency sum
+    double global_min_latency; // global min latency
+    double global_max_latency; // global max latency
+    double min_latency = INFINITY; // rank's min_latency
+    double max_latency = -1.0;  // rank's max latency
+    int total_msgs_rcvd = 0.0;        // global msgs rcvd
+    if (rank != 0) {
+        min_latency =
+            *std::min_element(std::begin(latencies), std::end(latencies));
+        max_latency =
+            *std::max_element(std::begin(latencies), std::end(latencies));
+        for (const auto& l : latencies) {
+            sum_latencies += l;
+        }
+    } else {
+        for (const auto& msg : all_msgs_rcvd) {
+            total_msgs_rcvd += msg;
+        }
+    }
+    MPI_Reduce(
+        &sum_latencies, &global_sum_latencies, 1, MPI_DOUBLE, MPI_SUM, 0,
+        MPI_COMM_WORLD
+    );
+    MPI_Reduce(
+        &min_latency, &global_min_latency, 1, 
+        MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD
+    );
+    MPI_Reduce(
+        &max_latency, &global_max_latency, 1,
+        MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD
+    );
+
+    // rank0 calculates avg and prints out
+    if (rank == 0) {
+        double avg = global_sum_latencies/(double)total_msgs_rcvd;
+        std::cout << "Average latency (deciseconds): " << avg << endl <<
+        "Min latency (deciseconds): " << global_min_latency << endl <<
+        "Max latency (deciseconds): " << global_max_latency << endl;
+    }
+
+    // TODO calculate standard dev?
+    MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::close_transceivers<NUM_TRXS>(trxs);
     MPI_Finalize();
     return 0;
 }
