@@ -33,11 +33,15 @@ using std::endl;
 // #define FILE_SIZE 120000 // change as # trxs/procs scale up
 #define FILE_NAME "latencies.txt"
 
+// TRXS INIT PARAMS
+#define BUFFER_SIZE 2048   // bytes
+#define PACKET_SIZE 32 // don't send data past this size
+#define LATENCY 0 // mock time delay between send and rcv
+
 // RANDOM WAYPOINT SIMULATION PARAMS
-#define RAND_SEED 52021
+#define RAND_SEED 52021 // keeps rand way-point paths consistently random
 #define MAP_SIZE 1000 // Square world with no wrap-around.
-#define NUM_TRXS 2
-#define MAX_BUFFER_SIZE 2048   // bytes
+#define NUM_TRXS 2 // trxs/rank
 #define SIMULATION_DURATION  2 // s
 #define TIME_STEP 100          // interval between transceiver moves
 #define DATA_PERIOD 180         // Intervals btw data transmission
@@ -111,7 +115,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    auto trxs = MPIRadioTransceiver<MAX_BUFFER_SIZE>::transceivers<NUM_TRXS>();
+    auto trxs = MPIRadioTransceiver<BUFFER_SIZE>::transceivers<NUM_TRXS>();
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -129,8 +133,6 @@ int main(int argc, char** argv) {
         auto& t = trxs[i];
         t.set_send_range(COMM_RANGE);
         t.set_recv_range(COMM_RANGE);
-        t.set_send_duration(SEND_DELAY);
-        t.set_recv_duration(RECV_DELAY);
     }
 
     // Make sure all ranks' transceivers initialized before proceeding.
@@ -243,7 +245,7 @@ int main(int argc, char** argv) {
         for (size_t i = 0; i < num_ranks - 1; ++i) {
             if (rcvs[i] != MPI_SUCCESS) {
                 std::cerr << "Receiving latencies  not succesful" << endl;
-                MPIRadioTransceiver<MAX_BUFFER_SIZE>::
+                MPIRadioTransceiver<BUFFER_SIZE>::
                     close_transceivers<NUM_TRXS>(trxs);
                 MPI_Finalize();
                 return 1;
@@ -296,7 +298,10 @@ int main(int argc, char** argv) {
     // TODO min/max-heap find median from stream of data
     // TODO stddev streaming fxn
     // TODO create ds of latencies and msg_counter per rank
-    MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<NUM_TRXS>(trxs);
+    MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::close_transceivers<NUM_TRXS>(trxs);
     MPI_Finalize();
     return 0;
 }
