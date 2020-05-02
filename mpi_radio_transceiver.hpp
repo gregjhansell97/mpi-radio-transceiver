@@ -50,7 +50,6 @@ public:
         int status = MPI_Send(&mpi_msg, sizeof(MPIMsg), MPI_BYTE, 
                 0, 0, MPI_COMM_WORLD);
         
-        double fixed_time = MPI_Wtime();
         double current_time;
         double sleep = (L/1000.0);
         while(sleep > 0.0) {
@@ -58,6 +57,31 @@ public:
             std::this_thread::sleep_for(std::chrono::milliseconds((size_t)(sleep*1000)));
             sleep -= (MPI_Wtime() - current_time);
         }
+        ////////////////////////////////////////////////////////////////////////
+        // HERE IS WHERE YOU WILL LOG SEND INFORMATION:
+        //
+        //  x: x-position of broadcasted value
+        //  y: y-position of broadcasted value
+        //  time: time after delay L <-- be careful L is size_t type and is the 
+        //      latency in milliseconds
+        //  send_range: how far it sends messages
+        //  size of data sent
+        //  data: sent
+        //
+        //  I would recommend doing some
+        //  kind of struct variable and write it as a stream of bytes that
+        //  way: look at MPIMsg for ideas, except this one would be public
+        //  perhaps like Transceiver::SendItem (where Transceiver is the class)
+        //
+        //  p.s. the file pointer is static and may need a lock (you'll have
+        //  to confirm that)
+        //
+        //  p.p.s The file pointer is send_file_ptr
+        //
+        //  p.p.p.s the file pointer can be null so check for that
+        //
+        //
+        ////////////////////////////////////////////////////////////////////////
         return size;
     }
 
@@ -108,6 +132,27 @@ public:
                     sleep -= (MPI_Wtime() - current_time); 
                 } else {
                     // not interference, message received successfully
+                    ////////////////////////////////////////////////////////////////////////
+                    // HERE IS WHERE YOU WILL LOG RECEIVE  INFORMATION: ^^ and the if statement above
+                    //
+                    //  x: x-position of receiver (m_x)
+                    //  y: y-position of receiver
+                    //  time: time received L <-- be careful L is size_t type and is the 
+                    //      latency in milliseconds
+                    //  recv_range: how far it sends messages
+                    //  interferance: a boolean label of whether its interference
+                    //  size: of data sent
+                    //  data: sent
+                    //
+                    //  p.s. the file pointer is static and may need a lock (you'll have
+                    //  to confirm that)
+                    //
+                    //  p.p.s The file pointer is recv_file_ptr
+                    //
+                    //  p.p.p.s the file pointer can be null so check for that
+                    //
+                    //  maybe look into MPI_File_write_ordered
+                    //
                     *data = m_rcvd;
                     return data_size;
                 }
@@ -134,7 +179,8 @@ public:
      *     N: number of transceivers
      */
     template<size_t N>
-    static MPIRadioTransceiver* transceivers() {
+    static MPIRadioTransceiver* transceivers(
+            MPI_File* send_file_ptr=nullptr, MPI_File* recv_file_ptr=nullptr) {
         // confirm proper thread support is available
         int provided_thread_support;
         MPI_Query_thread(&provided_thread_support);
@@ -144,6 +190,9 @@ public:
             << provided_thread_support << "-thread-level support" << std::endl;
             return nullptr; // something went wrong
         } 
+
+        send_file_ptr = send_file_ptr;
+        recv_file_ptr = recv_file_ptr; 
 
         static MPIRadioTransceiver trxs[N]; 
         // TODO send copy of trxs back, not this array^^ because
@@ -236,9 +285,9 @@ private:
     // is called
     static std::thread* mpi_listener_thread;
 
-    // mpi channels used
-    static const int RECV_CHANNEL = 0;
-    static const int CLOSE_CHANNEL = 1;
+    // File I/O
+    static MPI_File* send_file_ptr;
+    static MPI_File* recv_file_ptr;
 
     // can only create transcievers through template transceivers
     MPIRadioTransceiver() { 
@@ -360,5 +409,11 @@ private:
 
 template<size_t B, size_t P, size_t L>
 std::thread* MPIRadioTransceiver<B, P, L>::mpi_listener_thread;
+
+template<size_t B, size_t P, size_t L>
+MPI_File* MPIRadioTransceiver<B, P, L>::send_file_ptr;
+
+template<size_t B, size_t P, size_t L>
+MPI_File* MPIRadioTransceiver<B, P, L>::recv_file_ptr;
 
 #endif // MPI_RADIO_TRANSCEIVER_HPP

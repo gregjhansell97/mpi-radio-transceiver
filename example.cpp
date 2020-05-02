@@ -36,6 +36,19 @@ int main(int argc, char** argv) {
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
+
+    // OPEN MPI FILES
+    MPI_File send_file;
+    MPI_File_open(
+            MPI_COMM_WORLD, "send_file.log", 
+            MPI_MODE_CREATE | MPI_MODE_RDWR,
+            MPI_INFO_NULL, &send_file);  
+    MPI_File recv_file;
+    MPI_File_open(
+            MPI_COMM_WORLD, "recv_file.log", 
+            MPI_MODE_CREATE | MPI_MODE_RDWR,
+            MPI_INFO_NULL, &recv_file);  
+
     // create two transceivers
     auto trxs = MPIRadioTransceiver<
         BUFFER_SIZE,
@@ -86,6 +99,10 @@ int main(int argc, char** argv) {
         BUFFER_SIZE,
         PACKET_SIZE,
         LATENCY>::close_transceivers<2>(trxs);
+
+
+    MPI_File_close(&send_file);
+    MPI_File_close(&recv_file);
 
     MPI_Finalize();
     return 0;
