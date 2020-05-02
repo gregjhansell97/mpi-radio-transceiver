@@ -19,7 +19,7 @@ public:
      * Args:
      *     data: the raw-bytes of data being sent
      *     size: number of bytes of the data being sent
-     *     timeout: if send is blocking, how long should it wait to send in milliseconds
+     *     timeout: if send is blocking, how long should it wait to send in seconds
      *
      * Returns:
      *     status value regarding the success of sending, if less than zero
@@ -27,7 +27,7 @@ public:
      *     communicator closed during the send operation
      */
     virtual ssize_t send(
-            const char* data, const size_t size, const int timeout) = 0;
+            const char* data, const size_t size, const double timeout) = 0;
 
     /**
      * Receives bytes of data from another communicator
@@ -44,7 +44,7 @@ public:
      *     (Communicator::error) or the communicator closed during the recv
      *     operation
      */
-    virtual ssize_t recv(char** data, const int timeout) = 0;
+    virtual ssize_t recv(char** data, const double timeout) = 0;
 
     /**
      * Idempotent method that ends send and recv capabilities and wraps up any

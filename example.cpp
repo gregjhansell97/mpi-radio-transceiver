@@ -14,7 +14,9 @@ using std::cerr;
 using std::endl;
 
 
-#define MAX_BUFFER_SIZE 2048 // dont send data past this limit
+#define BUFFER_SIZE 2048 // buffer gets to full messages dropped
+#define PACKET_SIZE 32 // dont send data past this size
+#define LATENCY 0 // ideal time delay between send and recv
 
 int main(int argc, char** argv) {
     // Initialize MPI Environment
@@ -35,7 +37,10 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 
     // create two transceivers
-    auto trxs = MPIRadioTransceiver<MAX_BUFFER_SIZE>::transceivers<2>();
+    auto trxs = MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::transceivers<2>();
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -46,8 +51,6 @@ int main(int argc, char** argv) {
     auto& t0 = trxs[0];
     t0.set_x(0);
     t0.set_y(0);
-    t0.set_send_duration(0);
-    t0.set_recv_duration(0);
     // puts t1 & t2 out of range
     t0.set_send_range(0.25);
     t0.set_recv_range(0.25);
@@ -55,10 +58,7 @@ int main(int argc, char** argv) {
     auto& t1 = trxs[1];
     t1.set_x(1);
     t1.set_y(1);
-    t1.set_send_duration(0);
-    t1.set_recv_duration(0);
     // puts t1 & t2 out of range
-    t0.set_send_range(0.25);
     t1.set_send_range(0.25);
     t1.set_recv_range(0.25);
 
@@ -82,7 +82,10 @@ int main(int argc, char** argv) {
     }
 
     // Shuts down all the transceivers
-    MPIRadioTransceiver<MAX_BUFFER_SIZE>::close_transceivers<2>(trxs);
+    MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::close_transceivers<2>(trxs);
 
     MPI_Finalize();
     return 0;
