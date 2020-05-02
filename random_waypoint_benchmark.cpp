@@ -10,6 +10,7 @@ Usage:
 */
 
 // C/C++libraries
+#include <algorithm>
 #include <assert.h>
 #include <chrono>
 #include <condition_variable>
@@ -17,6 +18,7 @@ Usage:
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <numeric>
 #include <random>
 #include <thread>
 
@@ -115,7 +117,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    auto trxs = MPIRadioTransceiver<BUFFER_SIZE>::transceivers<NUM_TRXS>();
+    auto trxs = MPIRadioTransceiver<
+        BUFFER_SIZE,
+        PACKET_SIZE,
+        LATENCY>::transceivers<NUM_TRXS>();
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -245,7 +250,10 @@ int main(int argc, char** argv) {
         for (size_t i = 0; i < num_ranks - 1; ++i) {
             if (rcvs[i] != MPI_SUCCESS) {
                 std::cerr << "Receiving latencies  not succesful" << endl;
-                MPIRadioTransceiver<BUFFER_SIZE>::
+                MPIRadioTransceiver<
+                    BUFFER_SIZE,
+                    PACKET_SIZE,
+                    LATENCY>::
                     close_transceivers<NUM_TRXS>(trxs);
                 MPI_Finalize();
                 return 1;
@@ -253,51 +261,54 @@ int main(int argc, char** argv) {
         }
     }
 
-    int buffer_size;
-    MPI_File fh; // file pointer to singular file
-    MPI_File_open(
-        MPI_COMM_WORLD,
-        FILE_NAME,
-        MPI_MODE_WRONLY|MPI_MODE_CREATE,
-        MPI_INFO_NULL,
-        &fh
-    );
-    // all non-0 ranks write their latencies to file
-    if (rank != 0) {
-        MPI_Offset offset;
-        MPI_Status status;
-        offset = (rank - 1) * FILE_SIZE/(num_ranks - 1);
-        std::cout << "rank " << rank << " offset " << offset << endl;
-        MPI_File_write_at(
-            fh,
-            offset,
-            latencies.data(),
-            msgs_rcvd,
-            MPI_DOUBLE,
-            &status
-        );
-        // check that the right # of objs were written
-        int count;
-        MPI_Get_count(&status, MPI_DOUBLE, &count);
-        assert(count == msgs_rcvd);
-    }
-    MPI_File_close(&fh);
     // wait for all latencies to be written
     MPI_Barrier(MPI_COMM_WORLD);
-    // rank 0 collectively reads and sends 1D arr to CUDA
-    // for metric calculations
 
-    // // METRICS
-    // // - average latency
-    // // - median -- use median of medians as an approx
-    // // know from msg counts size of incoming buf from each rank
-    MPI_Barrier(MPI_COMM_WORLD);
+    // METRICS
+    // - average, min, and max latencies
+    // know from msg counts size of incoming #s from each rank
+    double sum_latencies = 0.0; // rank's summed latencies
+    double global_sum_latencies; // global latency sum
+    double global_min_latency; // global min latency
+    double global_max_latency; // global max latency
+    double min_latency = INFINITY; // rank's min_latency
+    double max_latency = -1.0;  // rank's max latency
+    int total_msgs_rcvd = 0.0;        // global msgs rcvd
+    if (rank != 0) {
+        min_latency =
+            *std::min_element(std::begin(latencies), std::end(latencies));
+        max_latency =
+            *std::max_element(std::begin(latencies), std::end(latencies));
+        for (const auto& l : latencies) {
+            sum_latencies += l;
+        }
+    } else {
+        for (const auto& msg : all_msgs_rcvd) {
+            total_msgs_rcvd += msg;
+        }
+    }
+    MPI_Reduce(
+        &sum_latencies, &global_sum_latencies, 1, MPI_DOUBLE, MPI_SUM, 0,
+        MPI_COMM_WORLD
+    );
+    MPI_Reduce(
+        &min_latency, &global_min_latency, 1, 
+        MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD
+    );
+    MPI_Reduce(
+        &max_latency, &global_max_latency, 1,
+        MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD
+    );
 
-    // rank0 reads from file, min/max-heap median, avg, std dev
-    // output to screen?
-    // TODO min/max-heap find median from stream of data
-    // TODO stddev streaming fxn
-    // TODO create ds of latencies and msg_counter per rank
+    // rank0 calculates avg and prints out
+    if (rank == 0) {
+        double avg = global_sum_latencies/(double)total_msgs_rcvd;
+        std::cout << "Average latency (deciseconds): " << avg << endl <<
+        "Min latency (deciseconds): " << global_min_latency << endl <<
+        "Max latency (deciseconds): " << global_max_latency << endl;
+    }
+
+    // TODO calculate standard dev?
     MPIRadioTransceiver<
         BUFFER_SIZE,
         PACKET_SIZE,
