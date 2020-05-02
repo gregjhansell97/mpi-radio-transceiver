@@ -30,15 +30,15 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-#define FILE_SIZE 3000 // change as # trxs/procs scale up
-#define FILE_NAME "latencies.out"
+// #define FILE_SIZE 120000 // change as # trxs/procs scale up
+#define FILE_NAME "latencies.txt"
 
 // RANDOM WAYPOINT SIMULATION PARAMS
 #define RAND_SEED 52021
 #define MAP_SIZE 1000 // Square world with no wrap-around.
 #define NUM_TRXS 2
 #define MAX_BUFFER_SIZE 2048   // bytes
-#define SIMULATION_DURATION  5 // s
+#define SIMULATION_DURATION  2 // s
 #define TIME_STEP 100          // interval between transceiver moves
 #define DATA_PERIOD 180         // Intervals btw data transmission
 #define COMM_RANGE 125     // send and recv ranges.
@@ -88,6 +88,9 @@ typedef struct Point {
  }
 
 int main(int argc, char** argv) {
+    // ========================================================================
+    // ENVIRONMENT SETUP
+    // ========================================================================
     // Initializes MPI environment.
     int prov;
     int ret = MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &prov);
@@ -133,6 +136,9 @@ int main(int argc, char** argv) {
     // Make sure all ranks' transceivers initialized before proceeding.
     MPI_Barrier(MPI_COMM_WORLD);
 
+    // ========================================================================
+    // SIMULATION START
+    // ========================================================================
     /**
     * This test places all the transceivers on a finitely-sized world, and
     * and runs for a specified duration. At intervals of a pre-defined time
@@ -176,76 +182,115 @@ int main(int argc, char** argv) {
             }
         }
 
-        // check if sending out msgs right now
-        if (
-        (int)std::fmod(10000 * (curr_time + op_time), DATA_PERIOD) == 0) {
-            // all rank's trx[0] send out msg of curr_time
-            
-            for (size_t i = 0; i < NUM_TRXS; ++i) {
-                auto& t = trxs[i];
-                // grabs to 100-thousandth place for latency calcs.
-                // Add back the operations time for true clock time
-                // edge case rcv threads finished?
-                std::string cpp_time = std::to_string(MPI_Wtime());
-                const char* msg = cpp_time.c_str();
-                cout << "rank0-t" << i << " sent " <<
-                t.send(msg, 13, SEND_DELAY) <<
-                " bytes" << endl;
+        if (rank == 0) { // If rank 0, check if sending out msgs right now
+            if (
+            (int)std::fmod(10000 * (curr_time + op_time), DATA_PERIOD) == 0) {
+                // rank 0's trx[0] send out msg of curr_time 
+                for (size_t i = 0; i < NUM_TRXS; ++i) {
+                    auto& sender = trxs[i];
+                    // grabs to 100-thousandth place for latency calcs.
+                    // Add back the operations time for true clock time
+                    // edge case rcv threads finished?
+                    std::string cpp_time = std::to_string(MPI_Wtime());
+                    const char* msg = cpp_time.c_str();
+                    sender.send(msg, 13, SEND_DELAY);
+                }
             }
-        }
         } else { // receives on separate threads wait for info
             for (size_t i = 0; i < NUM_TRXS; ++i) {
                 auto& t = trxs[i];
-                char* raw_msg;
-                // wait for msg w/ timeout
+                char* raw_msg; // rcv 1msg/trxs
+                // wait for msg
                 size_t bytes = t.recv(&raw_msg, 0);
                 if (bytes == 13) { // you've got mail!
                     // grab time immediately after recv unblocks
-                    double rcvd_time = MPI_Wtime();
                     // individual times needed for median calcs
-                    latencies.push_back(rcvd_time - atof(raw_msg));
+                    latencies.push_back(MPI_Wtime() - atof(raw_msg));
                     msgs_rcvd++;
-                    std::cout << "first: rank" << rank << "trx" <<
-                    i << " rcvd " << raw_msg;
-                    if ((bytes = t.recv(&raw_msg, 0)) != 0) {
-                        std::cout << " second: rank" << rank << "trx" <<
-                        i << " rcvd " << raw_msg << endl;
-                        exit(-1);
-                    } // No other info rcvd
-                } else { // No other info rcvd
-                    assert(bytes == 0);
+                    for (size_t j = 1; j < NUM_TRXS; ++j) {
+                        if ((bytes = t.recv(&raw_msg, 0)) == 13) {
+                            latencies.push_back(MPI_Wtime() - atof(raw_msg));
+                            msgs_rcvd++;
+                        }
+                    }
                 }
             }
         }
         double op_end = MPI_Wtime(); // Take end time of operations
         op_time += op_end - op_start; // op_time will miss this line (small?)
     }
+    // ========================================================================
+    // SIMULATION END
+    // ========================================================================
 
-    int global_msgs_rcvd = 0; // amass total # of msgs
-    MPI_Reduce(
-        &msgs_rcvd, // send this rank's # of rcvd msgs
-        &global_msgs_rcvd, // rcv in this var
-        1, // expected # of msgs sent/rank
-        MPI_INT, // msg type
-        MPI_SUM,
-        0, // root rank
-        MPI_COMM_WORLD
-    );
-    // TODO optimization: collective i/o only rank 1 writes to file
-    MPI_File fh; // file ptr to latencies
-    if (rank != 0) { // rcving ranks write latencies to file
-        int bufsize = FILE_SIZE/(num_ranks - 1); // data chunk available/rank
-        for (const auto& l : latencies) {
-            MPI_File_open(
-                MPI_COMM_WORLD, FILE_NAME,
-                MPI_MODE_CREATE|MPI_MODE_WRONLY,
-                MPI_INFO_NULL, &fh
-            );
-            // MPI_File_write_at(fh, rank * bufsize, )
+    // ========================================================================
+    // METRICS, I/O, & CUDA
+    // ========================================================================
+    // Send msg counts to rank 0
+    uint all_msgs_rcvd[num_ranks-1]; // rank 0 track msgs rcvd by other ranks
+    if (rank != 0) {
+        MPI_Send(&msgs_rcvd, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+    } else {
+        int rcvs[num_ranks - 1];
+        MPI_Request reqs[num_ranks - 1];
+        MPI_Status stats[num_ranks - 1];
+        for (size_t i = 0; i < num_ranks - 1; ++i) {
+            rcvs[i] = MPI_Irecv(&all_msgs_rcvd[i], 1, MPI_INT, i + 1,
+                1, MPI_COMM_WORLD, &reqs[i]);
+        }
+        MPI_Waitall(num_ranks-1, reqs, stats);
+        // Error check all rcv operations were successful.
+        for (size_t i = 0; i < num_ranks - 1; ++i) {
+            if (rcvs[i] != MPI_SUCCESS) {
+                std::cerr << "Receiving latencies  not succesful" << endl;
+                MPIRadioTransceiver<MAX_BUFFER_SIZE>::
+                    close_transceivers<NUM_TRXS>(trxs);
+                MPI_Finalize();
+                return 1;
+            }
         }
     }
+
+    int buffer_size;
+    MPI_File fh; // file pointer to singular file
+    MPI_File_open(
+        MPI_COMM_WORLD,
+        FILE_NAME,
+        MPI_MODE_WRONLY|MPI_MODE_CREATE,
+        MPI_INFO_NULL,
+        &fh
+    );
+    // all non-0 ranks write their latencies to file
+    if (rank != 0) {
+        MPI_Offset offset;
+        MPI_Status status;
+        offset = (rank - 1) * FILE_SIZE/(num_ranks - 1);
+        std::cout << "rank " << rank << " offset " << offset << endl;
+        MPI_File_write_at(
+            fh,
+            offset,
+            latencies.data(),
+            msgs_rcvd,
+            MPI_DOUBLE,
+            &status
+        );
+        // check that the right # of objs were written
+        int count;
+        MPI_Get_count(&status, MPI_DOUBLE, &count);
+        assert(count == msgs_rcvd);
+    }
+    MPI_File_close(&fh);
+    // wait for all latencies to be written
     MPI_Barrier(MPI_COMM_WORLD);
-    cout << "TEST SUCCEEDED!" << endl;
+    // rank 0 collectively reads and sends 1D arr to CUDA
+    // for metric calculations
+
+    // // METRICS
+    // // - average latency
+    // // - median -- use median of medians as an approx
+    // // know from msg counts size of incoming buf from each rank
+    MPI_Barrier(MPI_COMM_WORLD);
+
     // rank0 reads from file, min/max-heap median, avg, std dev
     // output to screen?
     // TODO min/max-heap find median from stream of data
