@@ -3,21 +3,15 @@
 #include<unistd.h>
 #include<stdbool.h>
 
-#include <string.h> // TODO remove for cuda impl
-
-#include <iostream> // TODO remove for cuda version
-
 #include "./cuda_structs.h"
 
-using std::cout;
-using std::cerr;
-using std::endl;
+// cuda
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 // Counts the number of cuda devices
 // Returns: the number of cuda devices
 int get_cuda_device_count() {
-    return 1;
-    /*
     int device_count;
     cudaError_t cuda_status = cudaGetDeviceCount(&device_count);
     // check for device count failure
@@ -26,40 +20,36 @@ int get_cuda_device_count() {
                 cuda_status, device_count);
         exit(-1);
     }
-    return device_count;*/
+    return device_count;
 }
 
 // Sets the current cuda device
 void set_cuda_device(int rank, int cuda_device) {
-    return;
-    /*
     cudaError_t cuda_status =  cudaSetDevice(cuda_device);
     // check for device count failure
     if( cuda_status != cudaSuccess) {
         printf("Unable to have rank %d set to cuda device %d, error is %d \n",
                 rank, cuda_device, cuda_status);
         exit(-1);
-    }*/
+    }
 }
 
 // allocates memory for cuda
 void allocate_cuda_memory(char** data, const size_t size) {
-    *data = new char[size];
+    cudaMallocManaged(data, size);
 }
 
 // wait for all parallel gpu calculations to finish
 void synchronize_cuda_devices() {
-    //cudaDeviceSynchronize();
+    cudaDeviceSynchronize();
 }
 
 // frees allocated cuda memory
 void free_cuda_memory(char* data) {
-    delete [] data;
-    //cudaFree(data);
+    cudaFree(data);
 }
 
-//__gobal__ (for cuda)
-void deliver_mpi_msg_kernel(
+__global__ void deliver_mpi_msg_kernel(
         const size_t num_trxs,
         const size_t device_data_size,
         const size_t mail_size,
@@ -70,8 +60,8 @@ void deliver_mpi_msg_kernel(
         char* raw_mpi_msg, char* raw_device_data) {
     // this is where things get fast!
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
-    size_t i = 0;
-    const size_t step = 1;
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    const size_t step = blockDim.x * gridDim.x;
     double mag;
     double dx;
     double dy;
@@ -101,6 +91,7 @@ void deliver_mpi_msg_kernel(
             raw_device_data += step*device_data_size;
             continue;
         }
+        // head and tail of queue
         head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
         tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
         // not empty and inteference 
@@ -140,7 +131,7 @@ void deliver_mpi_msg(
     // THIS IS THE DRIVER FOR THE CUDA KERNEL
     //cout << "BLOCKS: " << blocks_count << endl;
     //cout << "THREADS PER BLOCK: " << threads_per_block << endl;
-    deliver_mpi_msg_kernel(
+    deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,
             mail_size,

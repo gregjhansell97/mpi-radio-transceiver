@@ -9,6 +9,8 @@ void allocate_cuda_memory(char** data, const size_t size);
 void synchronize_cuda_devices();
 void free_cuda_memory(char* data);
 void deliver_mpi_msg(
+        const unsigned long blocks_count,
+        const ushort threads_per_block, 
         const size_t num_trxs,
         const size_t device_data_size,
         const size_t mail_size,

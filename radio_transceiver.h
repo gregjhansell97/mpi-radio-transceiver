@@ -36,6 +36,7 @@ public:
             const size_t max_buffer_size,
             const size_t packet_size,
             const double latency,
+            const ushort threads_per_block=1,
             MPI_File* send_file_ptr=nullptr, MPI_File* recv_file_ptr=nullptr);
     /**
      * Closes transceivers created by the transceivers template function above
@@ -60,6 +61,9 @@ private:
     static double latency;
     static size_t mail_size;
     static size_t device_data_size; 
+    // cuda specs
+    static unsigned long blocks_count;
+    static ushort threads_per_block; 
 
     // listener spins up and on a loop of MPI receives until close_mpi_listener
     // is called

@@ -33,6 +33,8 @@ using std::lock_guard;
 using std::mutex;
 using std::unique_lock;
 
+unsigned long RadioTransceiver::blocks_count = 0;
+ushort RadioTransceiver::threads_per_block = 0; 
 size_t RadioTransceiver::num_trxs = 0;
 size_t RadioTransceiver::max_buffer_size = 0;
 size_t RadioTransceiver::packet_size = 0;
@@ -153,6 +155,7 @@ RadioTransceiver* RadioTransceiver::transceivers(
         const size_t max_buffer_size,
         const size_t packet_size,
         const double latency,
+        const ushort threads_per_block,
         MPI_File* send_file_ptr, MPI_File* recv_file_ptr) {
     // verify proper inputs
     if(max_buffer_size <= 0) {
@@ -169,10 +172,15 @@ RadioTransceiver* RadioTransceiver::transceivers(
         cerr << "ERROR: invalid number of transceivers" << endl;
         return nullptr;
     } else if(latency < 0.0) {
-        cerr << "Error: invalid latency" << endl;
+        cerr << "ERROR: invalid latency" << endl;
         return nullptr;
+    } else if(threads_per_block > num_trxs) {
+        cerr << "ERROR: threads_per_block must be smaller than "
+             << "the number of transceivers" << endl;
     }
-
+    
+    RadioTransceiver::threads_per_block = threads_per_block;
+    blocks_count = (unsigned long)(((num_trxs)/((double)threads_per_block)) + 0.5);
     RadioTransceiver::num_trxs = num_trxs;
     RadioTransceiver::max_buffer_size = max_buffer_size;
     RadioTransceiver::packet_size = packet_size;
@@ -320,6 +328,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
             //TODO replace with read-write lock
             std::lock_guard<std::mutex> device_lock(device_mtx); 
             deliver_mpi_msg(
+                    blocks_count, threads_per_block,
                     num_trxs,
                     device_data_size,
                     mail_size,
