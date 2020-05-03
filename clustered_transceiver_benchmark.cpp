@@ -3,6 +3,9 @@ File: clustered_transceiver_benchmark.cpp
 Description:
   A performance benchmark of the MPI Radio Transceiver's performance in a
   cluster of transceivers.
+Use: run.exe <# of trxs/cluster> <max buffer size> <max packet size> <latency>
+            <# of threads/block> <# of clusters>
+            (<file-I/O flag = 1>
 */
 
 // C/C++libraries
@@ -22,20 +25,13 @@ Description:
 #include "mpi.h"
 
 // MPI RADIO TRANSCEIVER
-#include "mpi_radio_transceiver.hpp"
+#include "radio_transceiver.h"
 
 using std::cout;
 using std::cerr;
 using std::endl;
 
-// TRXS INIT PARAMS
-#define BUFFER_SIZE 2048   // bytes
-#define PACKET_SIZE 32 // don't send data past this size
-#define LATENCY 0 // mock time delay between send and rcv
-
 #define _USE_MATH_DEFINES
-#define SND_RCV_RANGE 2
-#define RECV_TIMEOUT_MS 50
 
 /**
  * Generates a random point within a circle centered at (x_center, y_center)
@@ -52,24 +48,39 @@ std::pair<double, double> generate_point(
 }
 
 int main(int argc, char** argv) {
-    // Populates args for CUDA.
-    if (argc != 4) {
-        std::cout << "Usage: ./run_me.exe <# trxs (int)> \
-        <# threads/block (int)> <# of clusters (int)>" << std::endl;
+    // make sure all arguments exist
+    if (argc != 7 && argc != 8) {
+        std::cout << "Usage: \
+        run.exe <# of trxs/cluster> <max buffer size> <max packet size> \
+        <latency> <# of threads/block> <# of clusters> \
+        <optional: file-I/O? (0 or 1)>" <<
+        std::endl;
         return 1;
     }
 
-    // Initialize CUDA environment variables.
-    size_t num_trxs = atoi(argv[1]);
-    size_t threads_per_block = atoi(argv[2]);
-    size_t num_clusters = atoi(argv[3]);
+    // Initialize MPI/CUDA environment variables.
+    size_t num_trxs = atoi(argv[1]); // number of trxs per cluster
+    size_t max_buffer_size = atoi(argv[2]);
+    size_t max_packet_size = atoi(argv[3]);
+    size_t latency = atof(argv[4]); // double
+    size_t num_threads_per_block = atoi(argv[5]);
+    size_t num_clusters_per_thread = atoi(argv[6]);
+    bool file_io = 1; // Default behavior is assume file i/o is false
+    MPI_File* send_file_ptr = nullptr;
+    MPI_File* recv_file_ptr = nullptr;
 
     // Initializes MPI environment.
+    if (!MPI_WTIME_IS_GLOBAL) {
+        std::cerr << "Unable to initialize, wall clock time needs to be \
+        global" << std::endl;
+        return 1;
+    }
+
     int prov;
     int ret = MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &prov);
     if (ret != MPI_SUCCESS || prov != MPI_THREAD_MULTIPLE) {
         cout << "Unable to initialize the MPI execution environment." << endl;
-    return 1;
+        return 1;
     }
 
     // Grab MPI specs.
@@ -84,10 +95,38 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    auto trxs = MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::transceivers<num_trxs>();
+    // initialize the trxs depending on if file i/o is needed
+    if (argc == 8 && (file_io = atoi(argv[7]) == 0)) { // file i/o needed
+        // set file name based on the current config
+        std::string send_file_name = "send_logs_trxs=" + std::to_string(num_trxs) \
+         + "_buff=" + std::to_string(max_buffer_size) + "_packet=" + \
+         std::to_string(max_packet_size) + "_latency=" + std::to_string(latency) \
+        + "_#threads_per=" + std::to_string(num_threads_per_block) + "#clusters=" + \
+        std::to_string(num_clusters_per_thread) + ".out";
+        std::string recv_file_name = "recv_logs_trxs=" + std::to_string(num_trxs) \
+         + "_buff=" + std::to_string(max_buffer_size) + "_packet=" + \
+         std::to_string(max_packet_size) + "_latency=" + std::to_string(latency) \
+        + "_#threads_per=" + std::to_string(num_threads_per_block) + "#clusters=" + \
+        std::to_string(num_clusters_per_thread) + ".out";
+        MPI_File_open(
+            MPI_COMM_WORLD,
+            send_file_name.c_str(),
+            MPI_MODE_CREATE|MPI_MODE_WRONLY,
+            MPI_INFO_NULL,
+            send_file_ptr
+        );
+        MPI_File_open(
+            MPI_COMM_WORLD,
+            recv_file_name.c_str(),
+            MPI_MODE_CREATE|MPI_MODE_WRONLY,
+            MPI_INFO_NULL,
+            recv_file_ptr
+        );
+    }
+    auto trxs = RadioTransceiver::transceivers(
+        num_trxs, max_buffer_size, max_packet_size, latency,
+        num_threads_per_block, send_file_ptr, recv_file_ptr
+    );
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -95,81 +134,70 @@ int main(int argc, char** argv) {
 
     // Initialize the transceivers.
     // Each transceiver is given a location located with radius .5 of location
-    // (1, 1), and has a send/recv distance of 2. All transceivers across all
-    // ranks are within communication range of each other.
+    // (1, 1), and has a send/recv distance of .9.
+    // All transceivers across all ranks are within communication range of each
+    // other.
     std::pair<double, double> loc;
     for (size_t i = 0; i < num_trxs; ++i) {
         auto& t = trxs[i];
         // Setting parameters for transceiver t.
         loc = generate_point(1, 1, .5);
-        t.set_x(loc.first);
-        t.set_y(loc.second);
-        t.set_send_range(SND_RCV_RANGE);
-        t.set_recv_range(SND_RCV_RANGE);
+        t.device_data->x = loc.first;
+        t.device_data->y = loc.second;
+        t.device_data->send_range = .9;
+        t.device_data->recv_range = .9;
     }
 
     // Ensures all transceivers in all ranks are ready before test starts.
     MPI_Barrier(MPI_COMM_WORLD);
 
-    // TODO sync ENSURES
     // This clustering transceiver benchmark tests as follows:
-    // - rank 0 trx 0 sends a message
-    // - all other trxs across the ranks block waiting for the msg for 50ms
-    int counter = 0;    
-    if (rank == 0) {
-        auto& sender = trxs[0];
-        const char* msg = "Hey from r0 trx0\0";
-        cout << "r0-trx0 sent " <<
-        sender.send(msg, 17, 1) << " bytes" << endl;
-        // Iterate through all other transceivers on rank 0 to see if they've
-        // received the message.
-        char* rcvd_msg;
+    // - create X certain of clusters specified in the CLI args
+    // - each cluster has N numbers of trxs (N = total # of trxs/X)
+    // - 1 trxs/cluster transmits msgs accummulating to the max buffer size
+    // - wait for how long it takes for all trxs to receive all the msgs
+    // - reduces and spits out average latency time across clusters
+
+    size_t total_bytes_sent = 0;
+    auto& sender = trxs[0];
+    double start_time = MPI_Wtime(); // track how long it takes to rcv all msgs
+    const char* msg = "Hey from trx0";
+    // keep sending messages until trxs are maxed out
+    while (total_bytes_sent < max_buffer_size) {
+        sender.send(msg, 14, 0);
+        total_bytes_sent += 14;
+    }
+    size_t total_bytes_rcvd = 0; // track # of msgs rcvd so far
+    char* raw_msg;
+    while (total_bytes_rcvd != total_bytes_sent) {
         for (size_t i = 1; i < num_trxs; ++i) {
             auto& t = trxs[i];
-            size_t bytes = t.recv(&rcvd_msg, RECV_TIMEOUT_MS);
-            if (bytes == 17) { // If the message was received, count + 1.
-                // Check that the message is only what was originally sent.
-                assert(strcmp(rcvd_msg, "Hey from r0 trx0") == 0);
-                assert(t.recv(&rcvd_msg, 0) == 0);
-                counter++;
-            } else { // Check that no information was received.
-                assert(bytes == 0);
+            int bytes = t.recv(&raw_msg, 0);
+            if (bytes == 14) {
+                assert(strcmp(raw_msg, "Hey from trx0") == 0);
             }
         }
-        // Check that the sender never received its own message.
-        assert(sender.recv(&rcvd_msg, 0) == 0);
-    } else { // All other ranks should have received the message.
-        for (size_t i = 0; i < num_trxs; ++i) {
-            auto& t = trxs[i];
-            char* rcvd_msg;
-            // Receive data within timeout bounds.
-            size_t bytes = t.recv(&rcvd_msg, RECV_TIMEOUT_MS);
-            if (bytes == 17) { // Received message.
-                assert(strcmp(rcvd_msg, "Hey from r0 trx0") == 0);
-                assert(t.recv(&rcvd_msg, 0) == 0);
-                counter++;
-            } else { // Check that no information was received.
-                assert(bytes == 0);
-            }
-        }
+        total_bytes_rcvd += 14;
     }
 
-    int global_counter = 0;
+    std::cout << "Cluster " << rank << "finished receiving" << std::endl;
+
+    // use for average latency calcs later
+    double time_elapsed = MPI_Wtime() - start_time;
+    double global_elapsed_time = 0.0;
     MPI_Reduce(
-        &counter, &global_counter, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-
-    // Record the world's total # of trxs that received the msg.
-    if (rank == 0) {
-        std::ofstream file("num_trxs_rcvd_msgs.txt");
-        file << global_counter << std::endl;
-    }
+        &time_elapsed, &global_elapsed_time, 1, MPI_DOUBLE,
+        MPI_SUM, 0, MPI_COMM_WORLD
+    );
 
     // Shuts down all transceivers.
-    MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::close_transceivers<num_trxs>(trxs);
+    RadioTransceiver::close_transceivers(trxs);
 
+    std::cout << "Closed trxs" << std::endl;
+    // Record the world's total # of trxs that received the msg.
+    if (rank == 0) {
+        std::cout << global_elapsed_time/(double)num_ranks << std::endl;
+    }
     // Synchronize MPI ranks.
     MPI_Finalize();
     return 0;
