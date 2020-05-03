@@ -63,8 +63,8 @@ __global__ void deliver_mpi_msg_kernel(
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t step = blockDim.x * gridDim.x; // total threads in process
-    assert(step == 2);
-    assert(threadIdx.x == 0);
+    //assert(step == 2);
+    //assert(threadIdx.x == 0);
     double mag;
     double dx;
     double dy;
