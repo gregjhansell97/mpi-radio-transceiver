@@ -354,6 +354,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     MPI_BYTE,
                     0,
                     MPI_COMM_WORLD);
+            cerr << "message broadcasted: " << mpi_msg->size << endl;
             #ifdef HMAP_COMM_EVALUATION
             ticks t = getticks();
             MPI_Status _status;
