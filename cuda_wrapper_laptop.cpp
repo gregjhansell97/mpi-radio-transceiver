@@ -79,19 +79,17 @@ void deliver_mpi_msg_kernel(
     Mail* head;
     Mail* tail;
     for(; i < num_trxs; i += step) {
-        DeviceData* d = (DeviceData*)(raw_device_data);
+        DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
         assert(d->buffer_size <= max_buffer_size);
         //if(d->rank != 0) cerr << d->id << "-" << d->rank <<endl;
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
             // buffer overflow
-            raw_device_data += step*device_data_size;
             continue;
         }
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
             // don't send to self
-            raw_device_data += step*device_data_size;
             continue;
         }
         // calculate distance
@@ -100,7 +98,6 @@ void deliver_mpi_msg_kernel(
         dy = mpi_msg->send_y - d->y;
         if(mag*mag < dx*dx + dy*dy) {
             //  nodes too far away 
-            raw_device_data += step*device_data_size;
             continue;
         }
         head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
@@ -123,8 +120,6 @@ void deliver_mpi_msg_kernel(
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
         }
-
-        raw_device_data += step*device_data_size;
     }
 }
 
@@ -142,8 +137,8 @@ void deliver_mpi_msg(
     // THIS IS THE DRIVER FOR THE CUDA KERNEL
     //cout << "BLOCKS: " << blocks_count << endl;
     //cout << "THREADS PER BLOCK: " << threads_per_block << endl;
-    printf("blocks: %lu \n", blocks_count);
-    printf("threads-per-block: %hu \n", threads_per_block);
+    //printf("blocks: %lu \n", blocks_count);
+    //printf("threads-per-block: %hu \n", threads_per_block);
     deliver_mpi_msg_kernel(
             num_trxs,
             device_data_size,

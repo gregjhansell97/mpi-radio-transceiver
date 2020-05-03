@@ -63,26 +63,21 @@ __global__ void deliver_mpi_msg_kernel(
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     const size_t step = blockDim.x * gridDim.x; // total threads in process
-    //assert(step == 2);
-    //assert(threadIdx.x == 0);
     double mag;
     double dx;
     double dy;
     Mail* head;
     Mail* tail;
     for(; i < num_trxs; i += step) {
-        DeviceData* d = (DeviceData*)(raw_device_data);
-        //if(d->rank != 0) cerr << d->id << "-" << d->rank <<endl;
+        DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
             // buffer overflow
-            raw_device_data += step*device_data_size;
             continue;
         }
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
             // don't send to self
-            raw_device_data += step*device_data_size;
             continue;
         }
         // calculate distance
@@ -91,7 +86,6 @@ __global__ void deliver_mpi_msg_kernel(
         dy = mpi_msg->send_y - d->y;
         if(mag*mag < dx*dx + dy*dy) {
             //  nodes too far away 
-            raw_device_data += step*device_data_size;
             continue;
         }
         // head and tail of queue
@@ -115,8 +109,6 @@ __global__ void deliver_mpi_msg_kernel(
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
         }
-
-        raw_device_data += step*device_data_size;
     }
 }
 
@@ -131,13 +123,7 @@ void deliver_mpi_msg(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
-    // THIS IS THE DRIVER FOR THE CUDA KERNEL
-    printf("blocks: %lu \n", blocks_count);
-    printf("threads-per-block: %hu", threads_per_block);
-    cout << "BLOCKS: " << blocks_count << endl;
-    cout << "THREADS PER BLOCK: " << threads_per_block << endl;
-    //deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
-    deliver_mpi_msg_kernel<<<1, 1>>>(
+    deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,
             mail_size,
