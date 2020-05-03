@@ -50,6 +50,23 @@ thread* RadioTransceiver::mpi_listener_thread = nullptr;
 MPI_File* RadioTransceiver::send_file_ptr = nullptr;
 MPI_File* RadioTransceiver::recv_file_ptr = nullptr;
 
+
+#if defined(HMAP_COMM_EVALUATION) || defined(HMAP_CUDA_EVALUATION)
+static __inline__ ticks getticks(void)
+{
+    return MPI_Wtime();
+    /*
+    unsigned int tbl, tbu0, tbu1;
+    do {
+        __asm__ __volatile__ ("mftbu %0": "=r"(tbu0));
+        __asm__ __volatile__ ("mftb %0": "=r"(tbl));
+        __asm__ __volatile__ ("mftbu %0": "=r"(tbu1));
+    } while (tbu0 != tbu1);
+    return ((((unsigned long long)tbu0) << 32) | tbl);
+    */
+}
+#endif
+
 ssize_t RadioTransceiver::send(
         const char* data, const size_t size, const double timeout) {
     // valid packet size
@@ -64,7 +81,6 @@ ssize_t RadioTransceiver::send(
     // cast raw data to mpi message
     MPIMsg* mpi_msg = (MPIMsg*)raw_data;
 
-    // set msg information
     mpi_msg->sender_rank = device_data->rank;
     mpi_msg->sender_id = device_data->id;
     mpi_msg->send_x = device_data->x;
@@ -77,8 +93,12 @@ ssize_t RadioTransceiver::send(
     device_data->last_send_time = MPI_Wtime();
 
     // send message to root 
+    #ifdef HMAP_COMM_EVALUATION
+    ticks t = getticks();
+    #endif
     int status = MPI_Send(mpi_msg, mpi_msg_size, MPI_BYTE,
             0, 0, MPI_COMM_WORLD);
+
 
     delete [] raw_data; // free up raw data
 
@@ -87,6 +107,12 @@ ssize_t RadioTransceiver::send(
              << "status code: " << status << endl;
         return -1; 
     }
+
+    #ifdef HMAP_COMM_EVALUATION
+    status = MPI_Send((char*)(&t), sizeof(ticks), MPI_BYTE,
+            0, 1, MPI_COMM_WORLD);
+    #endif
+
     double current_time;
     double sleep = latency;
     while(sleep > 0.0) {
@@ -296,7 +322,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     mpi_msg,
                     max_mpi_msg_size,
                     MPI_BYTE,
-                    MPI_ANY_SOURCE, // recv channel
+                    MPI_ANY_SOURCE, 
                     0,
                     MPI_COMM_WORLD,
                     &status);
@@ -307,6 +333,19 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     MPI_BYTE,
                     0,
                     MPI_COMM_WORLD);
+            #ifdef HMAP_COMM_EVALUATION
+            ticks t = getticks();
+            MPI_Status _status;
+            if(mpi_msg->size > 0) {
+                ticks send_time;
+                MPI_Recv(&send_time, sizeof(ticks), MPI_BYTE, 
+                        0, 1, MPI_COMM_WORLD, &_status);
+                ticks diff = t - send_time;
+                MPI_Send(
+                        (char*)&diff, sizeof(ticks), MPI_BYTE, 
+                        0, 2, MPI_COMM_WORLD); 
+            }
+            #endif
         } else {
             // rest of group receives
             MPI_Bcast(
@@ -322,11 +361,13 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
             free_cuda_memory(raw_mpi_msg); 
             break;
         }
-        //std::cerr << &mpi_msg->data << std::endl;
         // need to aquire a shared lock
         {
             //TODO replace with read-write lock
             std::lock_guard<std::mutex> device_lock(device_mtx); 
+            #ifdef HMAP_CUDA_EVALUATION
+            ticks cuda_start = getticks();
+            #endif
             deliver_mpi_msg(
                     blocks_count, threads_per_block,
                     num_trxs,
@@ -337,6 +378,12 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     latency,
                     MPI_Wtime(),
                     (char*)(mpi_msg), (char*)(trxs[0].device_data));
+            #ifdef HMAP_CUDA_EVALUATION
+            ticks cuda_finish = getticks();
+            ticks diff = cuda_finish - cuda_start;
+            MPI_Send((char*)&diff, sizeof(ticks), MPI_BYTE, 
+                    0, 3, MPI_COMM_WORLD);
+            #endif
         }
         mailbox_flag->notify_all();
         // notify 

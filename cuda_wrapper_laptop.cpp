@@ -1,3 +1,4 @@
+#include <assert.h>
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
@@ -79,6 +80,7 @@ void deliver_mpi_msg_kernel(
     Mail* tail;
     for(; i < num_trxs; i += step) {
         DeviceData* d = (DeviceData*)(raw_device_data);
+        assert(d->buffer_size <= max_buffer_size);
         //if(d->rank != 0) cerr << d->id << "-" << d->rank <<endl;
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
