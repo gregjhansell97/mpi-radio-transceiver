@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     if (MPI_Comm_size(MPI_COMM_WORLD, &num_ranks) != MPI_SUCCESS) {
-        cout << "Unable to retireve the total number of ranks." << endl;
+        cout << "Unable to retrieve the total number of ranks." << endl;
         return 1;
     }
 
