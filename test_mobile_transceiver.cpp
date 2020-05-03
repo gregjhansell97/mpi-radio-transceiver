@@ -15,11 +15,13 @@ using std::endl;
 
 
 #define LOCATION_OFFSET 0.02
-#define NUM_TRXS 100 //  number of transceivers per rank
+#define NUM_TRXS 2048 //  number of transceivers per rank
 
 #define BUFFER_SIZE 2048 // buffer gets to full messages dropped
 #define PACKET_SIZE 32 // dont send data past this size
 #define LATENCY 0 // ideal time delay between send and recv
+
+#define THREADS_PER_BLOCK 32
 
 int main(int argc, char** argv) {
     if(!MPI_WTIME_IS_GLOBAL) {
@@ -45,7 +47,7 @@ int main(int argc, char** argv) {
     if(rank == 0) cout << "starting test_mobile_transceiver" << endl;
 
     auto trxs = RadioTransceiver::transceivers(
-            NUM_TRXS, BUFFER_SIZE, PACKET_SIZE, LATENCY);
+            NUM_TRXS, BUFFER_SIZE, PACKET_SIZE, LATENCY, THREADS_PER_BLOCK);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -93,12 +95,12 @@ int main(int argc, char** argv) {
         for(size_t i = 1; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 1) == sizeof(i));
+            assert(t.recv(&raw_msg, 100) == sizeof(i));
             size_t rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 1) == sizeof(i));
+            assert(t.recv(&raw_msg, 100) == sizeof(i));
             rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
@@ -111,13 +113,13 @@ int main(int argc, char** argv) {
             auto& t = trxs[i];
             char* raw_msg;
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 1) == sizeof(i));
+            assert(t.recv(&raw_msg, 100) == sizeof(i));
             size_t rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
             // receive data with a certain timeout
             
-            ssize_t size = t.recv(&raw_msg, 1);
+            ssize_t size = t.recv(&raw_msg, 100);
             assert(size == sizeof(i));
             rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
