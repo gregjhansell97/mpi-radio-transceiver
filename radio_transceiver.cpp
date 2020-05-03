@@ -81,11 +81,12 @@ ssize_t RadioTransceiver::send(
     // cast raw data to mpi message
     MPIMsg* mpi_msg = (MPIMsg*)raw_data;
 
+    double current_time = MPI_Wtime();
     mpi_msg->sender_rank = device_data->rank;
     mpi_msg->sender_id = device_data->id;
     mpi_msg->send_x = device_data->x;
     mpi_msg->send_y = device_data->y;
-    mpi_msg->send_time = MPI_Wtime();
+    mpi_msg->send_time = current_time;
     mpi_msg->send_range = device_data->send_range;
     mpi_msg->size = size;
     // (dest, source, num bytes)
@@ -100,7 +101,6 @@ ssize_t RadioTransceiver::send(
             0, 0, MPI_COMM_WORLD);
 
 
-    delete [] raw_data; // free up raw data
 
     if(status != 0) {
         cerr << "Send failed, MPI failed to send message to leader " 
@@ -113,8 +113,29 @@ ssize_t RadioTransceiver::send(
             0, 1, MPI_COMM_WORLD);
     #endif
 
-    double current_time;
     double sleep = latency;
+
+    /*
+    // recycle old raw data
+    const int offset = sizeof(MPIMsg) - sizeof(SendLogItem);
+    assert(offset > 0);
+    SendLogItem* item = (SendLogItem*)(raw_data + offset);
+    // re-populate information
+    item->x = device->x;
+    item->y = device->y;
+    item->time = current_time;
+    item->send_range = device->send_range;
+    const size_t send_log_item = sizeof(SendLogItem) + (size - 1);
+    char* raw_data = new char[mpi_msg_size];
+    cerr << "rank: " << rank << endl;
+    cerr << "x: " << item->x << endl;
+    cerr << "y: " << item->x << endl;
+    cerr << "time: " << item->time << endl;
+    cerr << "send_range: " << item->send_range << endl;
+    cerr << "size: " << item->size << endl;
+*/
+    delete [] raw_data; // free up raw data
+
     while(sleep > 0.0) {
         current_time = MPI_Wtime();
         std::this_thread::sleep_for(milliseconds((size_t)(sleep*1000)));
@@ -230,8 +251,8 @@ RadioTransceiver* RadioTransceiver::transceivers(
     set_cuda_device(rank, cuda_device);
 
     // SETS GLOBAL FILE POINTERS
-    send_file_ptr = send_file_ptr;
-    recv_file_ptr = recv_file_ptr; 
+    RadioTransceiver::send_file_ptr = send_file_ptr;
+    RadioTransceiver::recv_file_ptr = recv_file_ptr; 
 
     RadioTransceiver* trxs = new RadioTransceiver[num_trxs];
 

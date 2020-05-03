@@ -22,6 +22,14 @@ typedef double ticks;
 
 class RadioTransceiver : public hmap::interface::Communicator {
 public:
+
+    typedef struct SendLogItem {
+        double x, y, time;
+        double send_range;
+        size_t size;
+        char data;
+    } SendLogItem;
+
        
     ssize_t send(
             const char* data, 
