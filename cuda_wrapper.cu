@@ -36,7 +36,7 @@ void set_cuda_device(int rank, int cuda_device) {
 
 // allocates memory for cuda
 void allocate_cuda_memory(char** data, const size_t size) {
-    cudaMallocManaged(data, size);
+    printf(cudaGetErrorName(cudaMallocManaged(data, size)));
 }
 
 // wait for all parallel gpu calculations to finish
