@@ -6,7 +6,7 @@
 #include <thread>
 #include <condition_variable>
 
-#include "mpi_radio_transceiver.hpp"
+#include "radio_transceiver.h"
 
 
 using std::cout;
@@ -16,7 +16,7 @@ using std::endl;
 
 #define BUFFER_SIZE 2048 // buffer gets to full messages dropped
 #define PACKET_SIZE 32 // dont send data past this size
-#define LATENCY 0 // ideal time delay between send and recv
+#define LATENCY 0.0 // ideal time delay between send and recv
 
 int main(int argc, char** argv) {
     // Initialize MPI Environment
@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
 
 
     // OPEN MPI FILES
+    /*
     MPI_File send_file;
     MPI_File_open(
             MPI_COMM_WORLD, "send_file.log", 
@@ -48,12 +49,11 @@ int main(int argc, char** argv) {
             MPI_COMM_WORLD, "recv_file.log", 
             MPI_MODE_CREATE | MPI_MODE_RDWR,
             MPI_INFO_NULL, &recv_file);  
+    */
 
     // create two transceivers
-    auto trxs = MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::transceivers<2>();
+    auto trxs = RadioTransceiver::transceivers(
+            2, BUFFER_SIZE, PACKET_SIZE, LATENCY);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -62,48 +62,42 @@ int main(int argc, char** argv) {
 
     // set initial values for transceivers
     auto& t0 = trxs[0];
-    t0.set_x(0);
-    t0.set_y(0);
-    // puts t1 & t2 out of range
-    t0.set_send_range(0.25);
-    t0.set_recv_range(0.25);
-
     auto& t1 = trxs[1];
-    t1.set_x(1);
-    t1.set_y(1);
-    // puts t1 & t2 out of range
-    t1.set_send_range(0.25);
-    t1.set_recv_range(0.25);
+    t0.device_data->x = 21.2;
+    t0.device_data->y = 21.2;
+    // put t1 & t2 out of range
+    t0.device_data->send_range = 0.25;
+    t0.device_data->recv_range = 0.25;
 
+    t1.device_data->x = 10.5;
+    t1.device_data->y = 10.5;
+    t1.device_data->send_range = 0.25;
+    t1.device_data->recv_range = 0.25;
     // ENSURES: ranks are done with adjusting their t0/t1 parameters
     MPI_Barrier(MPI_COMM_WORLD); 
 
-    if(rank == 0) {
+   if(rank == 0) {
         const char* msg0 = "hello 0's\0";
         const char* msg1 = "hello 1's\0";
-        cout << "rank0-t0 sent " << 
-        t0.send(msg0, 10, 100) << " bytes" << endl; //(msg, size, timeou)
-        cout << "rank0-t1 sent " << 
-        t1.send(msg1, 10, 100) << " bytes" << endl;
+        //cout << "rank0-t0 sent " << 
+        t0.send(msg0, 10, 0.1);// << " bytes" << endl; //(msg, size, timeou)
+        //cout << "rank0-t1 sent " << 
+        t1.send(msg1, 10, 0.1);// << " bytes" << endl;
     } else {
         char* msg;
-        // 1000 millisecond timeout
-        ssize_t size = t0.recv(&msg, 1000);
+        // one second timeout
+        ssize_t size = t0.recv(&msg, 1);
         cout << "rank" << rank << "-t0 received " << msg << endl;
-        size = t1.recv(&msg, 1000);
+        size = t1.recv(&msg, 1);
         cout << "rank" << rank << "-t1 received " << msg << endl;
     }
 
     // Shuts down all the transceivers
-    MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::close_transceivers<2>(trxs);
-
-
+    RadioTransceiver::close_transceivers(trxs);
+    /*
     MPI_File_close(&send_file);
     MPI_File_close(&recv_file);
-
+    */
     MPI_Finalize();
     return 0;
 }

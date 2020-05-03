@@ -20,7 +20,8 @@ typedef struct Mail {
 } Mail;
 
 typedef struct DeviceData {
-    size_t id, rank;
+    int rank;
+    size_t id;
     double x, y, send_range, recv_range;
     double last_send_time;
     size_t buffer_size;
