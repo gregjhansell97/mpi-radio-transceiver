@@ -73,6 +73,7 @@ int main(int argc, char** argv) {
 
     // This Test selects moves around the first transceiver index and sees if
     // where it broadcasts changes
+    ssize_t size; 
     if(rank == 0) {
         auto& sender = trxs[0];
         for(size_t i = 0; i < NUM_TRXS; ++i) {
@@ -95,12 +96,23 @@ int main(int argc, char** argv) {
         for(size_t i = 1; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 100) == sizeof(i));
+            
+            //assert(t.recv(&raw_msg, 100) == sizeof(i));
+            size = t.recv(&raw_msg, 100);
+            if(size != sizeof(i)) {
+                cerr << "size: " << size << endl;
+            }
+            assert(size == sizeof(i));
             size_t rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 100) == sizeof(i));
+            size = t.recv(&raw_msg, 100);
+            if(size != sizeof(i)) {
+                cerr << "size: " << size << endl;
+            }
+            assert(size == sizeof(i));
+            //assert(t.recv(&raw_msg, 100) == sizeof(i));
             rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
@@ -113,14 +125,24 @@ int main(int argc, char** argv) {
             auto& t = trxs[i];
             char* raw_msg;
             // receive data with a certain timeout
-            assert(t.recv(&raw_msg, 100) == sizeof(i));
+            size = t.recv(&raw_msg, 100);
+            if(size != sizeof(i)) {
+                cerr << "size: " << size << endl;
+            }
+            assert(size == sizeof(i));
+            //assert(t.recv(&raw_msg, 100) == sizeof(i));
             size_t rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
             // receive data with a certain timeout
             
-            ssize_t size = t.recv(&raw_msg, 100);
+            //ssize_t size = t.recv(&raw_msg, 100);
+            size = t.recv(&raw_msg, 100);
+            if(size != sizeof(i)) {
+                cerr << "size: " << size << endl;
+            }
             assert(size == sizeof(i));
+            //assert(size == sizeof(i));
             rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
