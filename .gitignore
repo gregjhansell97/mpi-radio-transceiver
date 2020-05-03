@@ -5,4 +5,4 @@
 *.txt
 *.ignore
 *.log
-
+*.o
