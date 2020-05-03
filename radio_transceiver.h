@@ -15,6 +15,11 @@
 // LOCAL
 #include "cuda_structs.h"
 
+#if defined(HMAP_COMM_EVALUATION) || defined(HMAP_CUDA_EVALUATION)
+//typedef unsigned long long ticks;
+typedef double ticks;
+#endif
+
 class RadioTransceiver : public hmap::interface::Communicator {
 public:
        

@@ -1,0 +1,14 @@
+
+
+
+# separatly copiling the cuda code into an object file
+g++ -c ./cuda_wrapper_laptop.cpp -std=c++17 -Wall
+
+mpic++ ./evaluate_comm.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++17 -Wall -D HMAP_COMM_EVALUATION
+mpirun -n 100 ./run.exe
+
+mpic++ ./evaluate_cuda.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++17 -Wall -D HMAP_CUDA_EVALUATION
+mpirun -n 1 ./run.exe
+
+rm ./run.exe
+rm ./cuda_wrapper_laptop.o
