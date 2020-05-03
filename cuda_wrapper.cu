@@ -136,7 +136,8 @@ void deliver_mpi_msg(
     printf("threads-per-block: %hu", threads_per_block);
     cout << "BLOCKS: " << blocks_count << endl;
     cout << "THREADS PER BLOCK: " << threads_per_block << endl;
-    deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
+    //deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
+    deliver_mpi_msg_kernel<<<1, 1>>>(
             num_trxs,
             device_data_size,
             mail_size,
