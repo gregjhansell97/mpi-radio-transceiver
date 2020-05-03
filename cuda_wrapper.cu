@@ -1,3 +1,4 @@
+#include<assert.h>
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
@@ -61,7 +62,9 @@ __global__ void deliver_mpi_msg_kernel(
     // this is where things get fast!
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    const size_t step = blockDim.x * gridDim.x;
+    const size_t step = blockDim.x * gridDim.x; // total threads in process
+    assert(step == 2);
+    assert(threadIdx.x == 0);
     double mag;
     double dx;
     double dy;
@@ -129,8 +132,10 @@ void deliver_mpi_msg(
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
     // THIS IS THE DRIVER FOR THE CUDA KERNEL
-    //cout << "BLOCKS: " << blocks_count << endl;
-    //cout << "THREADS PER BLOCK: " << threads_per_block << endl;
+    printf("blocks: %lu \n", blocks_count);
+    printf("threads-per-block: %hu", threads_per_block);
+    cout << "BLOCKS: " << blocks_count << endl;
+    cout << "THREADS PER BLOCK: " << threads_per_block << endl;
     deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,

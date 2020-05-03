@@ -142,6 +142,8 @@ void deliver_mpi_msg(
     // THIS IS THE DRIVER FOR THE CUDA KERNEL
     //cout << "BLOCKS: " << blocks_count << endl;
     //cout << "THREADS PER BLOCK: " << threads_per_block << endl;
+    printf("blocks: %lu \n", blocks_count);
+    printf("threads-per-block: %hu \n", threads_per_block);
     deliver_mpi_msg_kernel(
             num_trxs,
             device_data_size,
