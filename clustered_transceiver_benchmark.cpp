@@ -167,20 +167,14 @@ int main(int argc, char** argv) {
         sender.send(msg, 14, 0);
         total_bytes_sent += 14;
     }
-    size_t total_bytes_rcvd = 0; // track # of msgs rcvd so far
+    
     char* raw_msg;
-    while (total_bytes_rcvd != total_bytes_sent) {
-        for (size_t i = 1; i < num_trxs; ++i) {
-            auto& t = trxs[i];
-            int bytes = t.recv(&raw_msg, 0);
-            if (bytes == 14) {
-                assert(strcmp(raw_msg, "Hey from trx0") == 0);
-            }
+    for (size_t i = 1; i < num_trxs; ++i) {
+        auto& t = trxs[i];
+        while (t.recv(&raw_msg, 0) == 14) {
+            assert(strcmp(raw_msg, "Hey from trx0") == 0);
         }
-        total_bytes_rcvd += 14;
     }
-
-    std::cout << "Cluster " << rank << "finished receiving" << std::endl;
 
     // use for average latency calcs later
     double time_elapsed = MPI_Wtime() - start_time;
@@ -190,14 +184,15 @@ int main(int argc, char** argv) {
         MPI_SUM, 0, MPI_COMM_WORLD
     );
 
+    // Record the world's total # of trxs that received the msg.
+    if (rank == 0) {
+        std::cout << global_elapsed_time/(double)num_ranks <<
+        "(s" << std::endl;
+    }
+
     // Shuts down all transceivers.
     RadioTransceiver::close_transceivers(trxs);
 
-    std::cout << "Closed trxs" << std::endl;
-    // Record the world's total # of trxs that received the msg.
-    if (rank == 0) {
-        std::cout << global_elapsed_time/(double)num_ranks << std::endl;
-    }
     // Synchronize MPI ranks.
     MPI_Finalize();
     return 0;
