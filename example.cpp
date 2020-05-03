@@ -35,6 +35,7 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+    cerr << "num-ranks: " << num_ranks << endl;
 
 
     // OPEN MPI FILES
@@ -52,8 +53,10 @@ int main(int argc, char** argv) {
     */
 
     // create two transceivers
+    if(rank == 0) cerr << "creating transceivers" << endl;
     auto trxs = RadioTransceiver::transceivers(
             2, BUFFER_SIZE, PACKET_SIZE, LATENCY);
+    if(rank == 0) cerr << "transceivers created" << endl;
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
