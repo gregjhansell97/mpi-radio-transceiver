@@ -35,7 +35,6 @@ using std::endl;
 
 #define _USE_MATH_DEFINES
 #define SND_RCV_RANGE 2
-#define NUM_TRXS 1000
 #define RECV_TIMEOUT_MS 50
 
 /**
@@ -53,6 +52,18 @@ std::pair<double, double> generate_point(
 }
 
 int main(int argc, char** argv) {
+    // Populates args for CUDA.
+    if (argc != 4) {
+        std::cout << "Usage: ./run_me.exe <# trxs (int)> \
+        <# threads/block (int)> <# of clusters (int)>" << std::endl;
+        return 1;
+    }
+
+    // Initialize CUDA environment variables.
+    size_t num_trxs = atoi(argv[1]);
+    size_t threads_per_block = atoi(argv[2]);
+    size_t num_clusters = atoi(argv[3]);
+
     // Initializes MPI environment.
     int prov;
     int ret = MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &prov);
@@ -76,7 +87,7 @@ int main(int argc, char** argv) {
     auto trxs = MPIRadioTransceiver<
         BUFFER_SIZE,
         PACKET_SIZE,
-        LATENCY>::transceivers<NUM_TRXS>();
+        LATENCY>::transceivers<num_trxs>();
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -87,7 +98,7 @@ int main(int argc, char** argv) {
     // (1, 1), and has a send/recv distance of 2. All transceivers across all
     // ranks are within communication range of each other.
     std::pair<double, double> loc;
-    for (size_t i = 0; i < NUM_TRXS; ++i) {
+    for (size_t i = 0; i < num_trxs; ++i) {
         auto& t = trxs[i];
         // Setting parameters for transceiver t.
         loc = generate_point(1, 1, .5);
@@ -113,7 +124,7 @@ int main(int argc, char** argv) {
         // Iterate through all other transceivers on rank 0 to see if they've
         // received the message.
         char* rcvd_msg;
-        for (size_t i = 1; i < NUM_TRXS; ++i) {
+        for (size_t i = 1; i < num_trxs; ++i) {
             auto& t = trxs[i];
             size_t bytes = t.recv(&rcvd_msg, RECV_TIMEOUT_MS);
             if (bytes == 17) { // If the message was received, count + 1.
@@ -128,7 +139,7 @@ int main(int argc, char** argv) {
         // Check that the sender never received its own message.
         assert(sender.recv(&rcvd_msg, 0) == 0);
     } else { // All other ranks should have received the message.
-        for (size_t i = 0; i < NUM_TRXS; ++i) {
+        for (size_t i = 0; i < num_trxs; ++i) {
             auto& t = trxs[i];
             char* rcvd_msg;
             // Receive data within timeout bounds.
@@ -157,7 +168,7 @@ int main(int argc, char** argv) {
     MPIRadioTransceiver<
         BUFFER_SIZE,
         PACKET_SIZE,
-        LATENCY>::close_transceivers<NUM_TRXS>(trxs);
+        LATENCY>::close_transceivers<num_trxs>(trxs);
 
     // Synchronize MPI ranks.
     MPI_Finalize();
