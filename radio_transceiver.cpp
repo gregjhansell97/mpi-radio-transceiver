@@ -67,6 +67,7 @@ ssize_t RadioTransceiver::send(
     mpi_msg->sender_id = device_data->id;
     mpi_msg->send_x = device_data->x;
     mpi_msg->send_y = device_data->y;
+    mpi_msg->send_time = MPI_Wtime();
     mpi_msg->send_range = device_data->send_range;
     mpi_msg->size = size;
     // (dest, source, num bytes)
@@ -79,6 +80,11 @@ ssize_t RadioTransceiver::send(
 
     delete [] raw_data; // free up raw data
 
+    if(status != 0) {
+        cerr << "Send failed, MPI failed to send message to leader " 
+             << "status code: " << status << endl;
+        return -1; 
+    }
     double current_time;
     double sleep = latency;
     while(sleep > 0.0) {
@@ -99,14 +105,14 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
         mailbox_flag->wait_for(
                 lk,
                 milliseconds((int)(sleep*1000.0)),
-                [this]{ return device_data->_head != device_data->_tail; }); 
+                [this]{ return device_data->buffer_size > 0; }); 
         // decrement amount of slep
         sleep -= (MPI_Wtime() - current_time);
         current_time = MPI_Wtime(); // recet current time
         char* raw_mailbox = (char*)(&device_data->_mailbox);
         Mail* head = (Mail*)(raw_mailbox + (device_data->_head)*mail_size);
-        Mail* tail = (Mail*)(raw_mailbox + (device_data->_tail)*mail_size);
-        if(head != tail) { // messages available
+        //Mail* tail = (Mail*)(raw_mailbox + (device_data->_tail)*mail_size);
+        if(device_data->buffer_size > 0) { // messages available
             const double next_recv_time = head->send_time + latency;
             if(current_time < next_recv_time) {
                 // need to wait
@@ -241,6 +247,10 @@ void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
         // send poison pill
         int status = MPI_Send(poison_pill, sizeof(MPIMsg), MPI_BYTE,
                 0, 0, MPI_COMM_WORLD);
+        if(status != 0) {
+            cerr << "Close down error, MPI failed to send poison pill " 
+                 << "status code: " << status << endl;
+        }
 
         delete [] raw_data;
         // send closed message

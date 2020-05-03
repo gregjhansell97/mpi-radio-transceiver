@@ -77,7 +77,6 @@ void deliver_mpi_msg_kernel(
         //if(d->rank != 0) cerr << d->id << "-" << d->rank <<endl;
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
-            std::cerr << "BUFFER?" << std::endl;
             // buffer overflow
             raw_device_data += step*device_data_size;
             continue;
@@ -100,9 +99,8 @@ void deliver_mpi_msg_kernel(
         Mail* head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
         Mail* tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
         // not empty and inteference 
-        if(head != tail
+        if(d->buffer_size > 0
                 && mpi_msg->send_time - head->send_time < latency) {
-            std::cerr << "INTERFERENCE" << std::endl;
             // grow leading msg pointer to absorb other msg
             head->size += mpi_msg->size;
             // set head pointer to have interference

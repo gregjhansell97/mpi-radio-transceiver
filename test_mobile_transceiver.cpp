@@ -6,7 +6,7 @@
 #include <thread>
 #include <condition_variable>
 
-#include "mpi_radio_transceiver.hpp"
+#include "radio_transceiver.h"
 
 
 using std::cout;
@@ -15,7 +15,7 @@ using std::endl;
 
 
 #define LOCATION_OFFSET 0.02
-#define NUM_TRXS 10 //  number of transceivers per rank
+#define NUM_TRXS 100 //  number of transceivers per rank
 
 #define BUFFER_SIZE 2048 // buffer gets to full messages dropped
 #define PACKET_SIZE 32 // dont send data past this size
@@ -42,11 +42,10 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+    if(rank == 0) cout << "starting test_mobile_transceiver" << endl;
 
-    auto trxs = MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::transceivers<NUM_TRXS>();
+    auto trxs = RadioTransceiver::transceivers(
+            NUM_TRXS, BUFFER_SIZE, PACKET_SIZE, LATENCY);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -61,10 +60,10 @@ int main(int argc, char** argv) {
     for(size_t i = 0; i < NUM_TRXS; ++i) {
         auto& t = trxs[i];
         // setting parameters for t
-        t.set_x(i + 0.01);
-        t.set_y(0.0);
-        t.set_send_range(0.25);
-        t.set_recv_range(0.25);
+        t.device_data->x = i + 0.01;
+        t.device_data->y = 0.0;
+        t.device_data->send_range = 0.25;
+        t.device_data->recv_range = 0.25;
     }
 
     // ENSURES: all transceivers done with adjusting their locations
@@ -75,7 +74,15 @@ int main(int argc, char** argv) {
     if(rank == 0) {
         auto& sender = trxs[0];
         for(size_t i = 0; i < NUM_TRXS; ++i) {
-            sender.set_x(i + LOCATION_OFFSET); 
+            sender.device_data->x = i + LOCATION_OFFSET; 
+            const char* msg = (char*)(&i);
+            // send message with size, and a timeout of 0 
+            assert(sender.send(msg, sizeof(i), 1) == sizeof(i));
+            // shift x to another location and publish again
+        }
+        // shift back
+        for(size_t i = 0; i < NUM_TRXS; ++i) {
+            sender.device_data->x = i + LOCATION_OFFSET; 
             const char* msg = (char*)(&i);
             // send message with size, and a timeout of 0 
             assert(sender.send(msg, sizeof(i), 1) == sizeof(i));
@@ -87,7 +94,12 @@ int main(int argc, char** argv) {
             auto& t = trxs[i];
             // receive data with a certain timeout
             assert(t.recv(&raw_msg, 1) == sizeof(i));
-            int rcvd_msg = *(int*)(raw_msg);
+            size_t rcvd_msg = *(size_t*)(raw_msg);
+            // message received better be only i
+            assert(rcvd_msg == i);
+            // receive data with a certain timeout
+            assert(t.recv(&raw_msg, 1) == sizeof(i));
+            rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
             // no more data to receive
@@ -100,23 +112,26 @@ int main(int argc, char** argv) {
             char* raw_msg;
             // receive data with a certain timeout
             assert(t.recv(&raw_msg, 1) == sizeof(i));
-            int rcvd_msg = *(int*)(raw_msg);
+            size_t rcvd_msg = *(size_t*)(raw_msg);
+            // message received better be only i
+            assert(rcvd_msg == i);
+            // receive data with a certain timeout
+            
+            ssize_t size = t.recv(&raw_msg, 1);
+            assert(size == sizeof(i));
+            rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
             // no more data to receive
-            //assert(t.recv(&raw_msg, 0) == 0);
+            assert(t.recv(&raw_msg, 0) == 0);
         }
     }
 
-    cout << "TEST SUCCEEDED!!!" << endl;
-
     // may need sleep if operations are not blocking and not done yet
     //std::this_thread::sleep_for(std::chrono::seconds(1));
-    MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::close_transceivers<NUM_TRXS>(trxs);
+    RadioTransceiver::close_transceivers(trxs);
 
+    if(rank == 0) cout << "test_mobile_transceiver success!" << endl;
 
     MPI_Finalize();
     return 0;

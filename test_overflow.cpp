@@ -6,7 +6,7 @@
 #include <thread>
 #include <condition_variable>
 
-#include "mpi_radio_transceiver.hpp"
+#include "radio_transceiver.h"
 
 
 using std::cout;
@@ -15,8 +15,8 @@ using std::endl;
 
 
 #define BUFFER_SIZE 16 // buffer gets to full messages dropped
-#define PACKET_SIZE 32 // dont send data past this size
-#define LATENCY 10 // 10 millisecond pause
+#define PACKET_SIZE 3 // dont send data past this size
+#define LATENCY 0.01 // 10 millisecond pause
 
 int main(int argc, char** argv) {
     // Initialize MPI Environment
@@ -39,12 +39,11 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+    if(rank == 0) cout << "starting test_overflow" << endl;
 
     // create two transceivers
-    auto trxs = MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::transceivers<2>();
+    auto trxs = RadioTransceiver::transceivers(
+            2, BUFFER_SIZE, PACKET_SIZE, LATENCY);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -53,15 +52,15 @@ int main(int argc, char** argv) {
 
     // set initial values for transceivers, all transceivers in range
     auto& t0 = trxs[0];
-    t0.set_x(0);
-    t0.set_y(0);
-    t0.set_send_range(1);
-    t0.set_recv_range(1);
+    t0.device_data->x = 0;
+    t0.device_data->y = 0;
+    t0.device_data->send_range = 1;
+    t0.device_data->recv_range = 1;
     auto& t1 = trxs[1];
-    t1.set_x(0);
-    t1.set_y(0);
-    t1.set_send_range(1);
-    t1.set_recv_range(1);
+    t1.device_data->x = 0;
+    t1.device_data->y = 0;
+    t1.device_data->send_range = 1;
+    t1.device_data->recv_range = 1;
 
     // ENSURES: ranks are done with adjusting their t0/t1 parameters
     MPI_Barrier(MPI_COMM_WORLD); 
@@ -82,7 +81,6 @@ int main(int argc, char** argv) {
             assert(*rcvd == i);
         }
         ssize_t s = t1.recv(&rcvd, 1);
-        //if(rank == 0) std::cerr << (int)(*rcvd) <<  " == " << (int)i << std::endl;
         assert(s == 1);
         assert(*rcvd == i);
     }
@@ -91,10 +89,9 @@ int main(int argc, char** argv) {
 
 
     // Shuts down all the transceivers
-    MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::close_transceivers<2>(trxs);
+    RadioTransceiver::close_transceivers(trxs);
+
+    if(rank == 0) cout << "test_overflow success!" << endl;
 
     MPI_Finalize();
     return 0;
