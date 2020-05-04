@@ -139,7 +139,7 @@ void deliver_mpi_msg(
         char* raw_mpi_msg, char* raw_device_data) {
     printf("calling kernel\n");
     printf("blocks: %u\n", blocks_count);
-    printf("threads: %hu\n", threads_per_count);
+    printf("threads: %hu\n", threads_per_block);
     deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,
@@ -149,5 +149,5 @@ void deliver_mpi_msg(
             latency,
             current_time,
             raw_mpi_msg, raw_device_data);
-    synchronize_cuda_devices();
+    //synchronize_cuda_devices();
 }
