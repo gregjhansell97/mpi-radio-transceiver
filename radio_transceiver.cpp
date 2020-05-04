@@ -99,8 +99,8 @@ ssize_t RadioTransceiver::send(
     #endif
     int status = MPI_Send(mpi_msg, mpi_msg_size, MPI_BYTE,
             0, 0, MPI_COMM_WORLD);
-    cerr << "[" << device_data->rank << ", " << device_data->id << "]: " 
-         << "sent " << size << " bytes" << endl;
+    //cerr << "[" << device_data->rank << ", " << device_data->id << "]: " 
+    //     << "sent " << size << " bytes" << endl;
 
 
 
@@ -425,7 +425,9 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0, 3, MPI_COMM_WORLD);
             #endif
         }
-        cerr << "[" << rank << "]: "<< "notifying all transceivers" << endl;
+        cerr << "[0] buffer size: " << trxs[0].device_data->buffer_size << endl;
+        cerr << "[1] buffer size: " << trxs[1].device_data->buffer_size << endl;
+        //cerr << "[" << rank << "]: "<< "notifying all transceivers" << endl;
         mailbox_flag->notify_all();
         // notify 
 
