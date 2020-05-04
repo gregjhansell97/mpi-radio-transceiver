@@ -17,9 +17,7 @@ using std::endl;
 #define LOCATION_OFFSET 0.02
 #define NUM_TRXS 2048 //  number of transceivers per rank
 
-#define BUFFER_SIZE 2048 // buffer gets to full messages dropped
-#define PACKET_SIZE 32 // dont send data past this size
-#define LATENCY 0 // ideal time delay between send and recv
+#define LATENCY 0.001 // ideal time delay between send and recv
 
 #define THREADS_PER_BLOCK 32
 
@@ -46,8 +44,7 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
     if(rank == 0) cout << "starting test_mobile_transceiver" << endl;
 
-    auto trxs = RadioTransceiver::transceivers(
-            NUM_TRXS, BUFFER_SIZE, PACKET_SIZE, LATENCY, THREADS_PER_BLOCK);
+    auto trxs = RadioTransceiver::transceivers(NUM_TRXS, LATENCY, THREADS_PER_BLOCK);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -83,7 +80,7 @@ int main(int argc, char** argv) {
             assert(sender.send(msg, sizeof(i), 1) == sizeof(i));
             // shift x to another location and publish again
         }
-        // shift back
+        // wanna see me do it again
         for(size_t i = 0; i < NUM_TRXS; ++i) {
             sender.device_data->x = i + LOCATION_OFFSET; 
             const char* msg = (char*)(&i);
@@ -136,6 +133,10 @@ int main(int argc, char** argv) {
             assert(rcvd_msg == i);
             // receive data with a certain timeout
             
+        }
+        for(size_t i = 0; i < NUM_TRXS; ++i) {
+            auto& t = trxs[i];
+            char* raw_msg;
             //ssize_t size = t.recv(&raw_msg, 100);
             size = t.recv(&raw_msg, 100);
             if(size != sizeof(i)) {
@@ -143,7 +144,7 @@ int main(int argc, char** argv) {
             }
             assert(size == sizeof(i));
             //assert(size == sizeof(i));
-            rcvd_msg = *(size_t*)(raw_msg);
+            size_t rcvd_msg = *(size_t*)(raw_msg);
             // message received better be only i
             assert(rcvd_msg == i);
             // no more data to receive
