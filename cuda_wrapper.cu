@@ -37,7 +37,7 @@ void set_cuda_device(int rank, int cuda_device) {
 
 // allocates memory for cuda
 void allocate_cuda_memory(char** data, const size_t size) {
-    printf(cudaGetErrorName(cudaMallocManaged(data, size)));
+    cudaMallocManaged(data, size);
 }
 
 // wait for all parallel gpu calculations to finish
@@ -94,13 +94,13 @@ __global__ void deliver_mpi_msg_kernel(
         // not empty and inteference 
         if(d->buffer_size > 0
                 && mpi_msg->send_time - head->send_time < latency) {
+            // NOTE: ^^ should be one before tail not head
             // grow leading msg pointer to absorb other msg
             head->size += mpi_msg->size;
             // set head pointer to have interference
             head->interference = true;
             d->buffer_size += mpi_msg->size;
         } else {
-            d->buffer_size += mpi_msg->size;
             tail->send_time = mpi_msg->send_time;
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
@@ -108,6 +108,7 @@ __global__ void deliver_mpi_msg_kernel(
             memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
+            d->buffer_size += mpi_msg->size;
         }
     }
 }
@@ -123,7 +124,6 @@ void deliver_mpi_msg(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
-    printf("cuda-size: %u\n", sizeof(MPIMsg));
     deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,

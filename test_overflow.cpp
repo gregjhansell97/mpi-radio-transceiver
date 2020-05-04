@@ -67,13 +67,14 @@ int main(int argc, char** argv) {
     
     char* rcvd;
     if(rank == 0) {
-        cerr << "sending t0 data" << std::endl;
+        //cerr << "sending t0 data" << std::endl;
         for(char i = 0; i < BUFFER_SIZE; ++i) {
-            cerr << "sent " << t0.send(&i, 1, 0) << 
-                " number of bytes (" << (int)(i) << ")" << endl;
+            t0.send(&i, 1, 0); 
+            //cerr << "sent " << t0.send(&i, 1, 0) << 
+            //    " number of bytes (" << (int)(i) << ")" << endl;
         }
         char overflow = 'a';
-        cerr << "sending t0 extra data " << t0.send(&overflow, 1, 0) << endl;
+        //cerr << "sending t0 extra data " << t0.send(&overflow, 1, 0) << endl;
     }
     // must wait for rank 0 to finish (pile up the buffers)
     MPI_Barrier(MPI_COMM_WORLD); 
