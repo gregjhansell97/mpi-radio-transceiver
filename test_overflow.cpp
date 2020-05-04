@@ -14,7 +14,7 @@ using std::cerr;
 using std::endl;
 
 
-#define BUFFER_SIZE 16 // buffer gets to full messages dropped
+#define BUFFER_SIZE 10 // buffer gets to full messages dropped
 #define PACKET_SIZE 3 // dont send data past this size
 #define LATENCY 0.01 // 10 millisecond pause
 

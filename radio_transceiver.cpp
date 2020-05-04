@@ -76,10 +76,11 @@ ssize_t RadioTransceiver::send(
         return 0;
     }
     // message size is the MPIMsg and remaining characters
-    const size_t mpi_msg_size = sizeof(MPIMsg) + (size - 1);
-    char* raw_data = new char[mpi_msg_size];
+    //const size_t mpi_msg_size = sizeof(MPIMsg) + (size - 1);
+    //char* raw_data = new char[mpi_msg_size];
     // cast raw data to mpi message
-    MPIMsg* mpi_msg = (MPIMsg*)raw_data;
+    MPIMsg _mpi_msg;// = (MPIMsg*)raw_data;
+    MPIMsg* mpi_msg = &_mpi_msg;
 
     double current_time = MPI_Wtime();
     mpi_msg->sender_rank = device_data->rank;
@@ -90,15 +91,17 @@ ssize_t RadioTransceiver::send(
     mpi_msg->send_range = device_data->send_range;
     mpi_msg->size = size;
     // (dest, source, num bytes)
-    memcpy(&mpi_msg->data, data, size);
+    memcpy(mpi_msg->data, data, size);
     device_data->last_send_time = MPI_Wtime();
 
     // send message to root 
     #ifdef HMAP_COMM_EVALUATION
     ticks t = getticks();
     #endif
-    int status = MPI_Send(mpi_msg, mpi_msg_size, MPI_BYTE,
+    int status = MPI_Send(mpi_msg, sizeof(MPIMsg), MPI_BYTE,
             0, 0, MPI_COMM_WORLD);
+    //int status = MPI_Send(mpi_msg, mpi_msg_size, MPI_BYTE,
+    //        0, 0, MPI_COMM_WORLD);
     //cerr << "[" << device_data->rank << ", " << device_data->id << "]: " 
     //     << "sent " << size << " bytes" << endl;
 
@@ -136,7 +139,7 @@ ssize_t RadioTransceiver::send(
     cerr << "send_range: " << item->send_range << endl;
     cerr << "size: " << item->size << endl;
 */
-    delete [] raw_data; // free up raw data
+    //delete [] raw_data; // free up raw data
 
     while(sleep > 0.0) {
         current_time = MPI_Wtime();
@@ -162,8 +165,9 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
         // decrement amount of slep
         sleep -= (MPI_Wtime() - current_time);
         current_time = MPI_Wtime(); // recet current time
-        char* raw_mailbox = (char*)(&device_data->_mailbox);
-        Mail* head = (Mail*)(raw_mailbox + (device_data->_head)*mail_size);
+        //char* raw_mailbox = (char*)(&device_data->_mailbox);
+        //Mail* head = (Mail*)(raw_mailbox + (device_data->_head)*mail_size);
+        Mail* head = device_data->_mailbox + device_data->_head;
         //Mail* tail = (Mail*)(raw_mailbox + (device_data->_tail)*mail_size);
         if(device_data->buffer_size > 0) { // messages available
             cerr << "[" << device_data->rank << ", " << device_data->id 
@@ -282,12 +286,14 @@ RadioTransceiver* RadioTransceiver::transceivers(
         sizeof(DeviceData) - sizeof(Mail) + max_buffer_size*(mail_size);
 
     char* raw_device_data = nullptr;
-    allocate_cuda_memory(&raw_device_data, 3*num_trxs*device_data_size);
+    allocate_cuda_memory(&raw_device_data, num_trxs*sizeof(DeviceData)); //num_trxs*device_data_size);
     assert(raw_device_data != nullptr);
 
+    
+    DeviceData* device_datas = (DeviceData*)raw_device_data;
     for(size_t i = 0; i < num_trxs; ++i) {
         // device data of a transceiver
-        DeviceData* device_data = (DeviceData*)raw_device_data;
+        DeviceData* device_data = &device_datas[i];//(DeviceData*)raw_device_data;
         device_data->rank = rank;
         device_data->id = i;
         device_data->x = 0.0;
@@ -301,7 +307,7 @@ RadioTransceiver* RadioTransceiver::transceivers(
         trxs[i].m_rcvd = new char[packet_size];
         trxs[i].device_data = device_data;
         // next device
-        raw_device_data += device_data_size;
+        //raw_device_data += device_data_size;
     }
 
     mailbox_flag = new condition_variable;
@@ -349,7 +355,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
     const size_t max_mpi_msg_size = sizeof(MPIMsg) + (packet_size - 1);
     char* raw_mpi_msg;
     // get from cuda memory
-    allocate_cuda_memory(&raw_mpi_msg, max_mpi_msg_size);
+    allocate_cuda_memory(&raw_mpi_msg, sizeof(MPIMsg));//max_mpi_msg_size);
 
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
     MPI_Status status;

@@ -79,8 +79,9 @@ void deliver_mpi_msg_kernel(
     Mail* head;
     Mail* tail;
     Mail* last;
+    DeviceData* devices = (DeviceData*)(raw_device_data);
     for(; i < num_trxs; i += step) {
-        DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
+        DeviceData* d = &devices[i]; //DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
         assert(d->buffer_size <= max_buffer_size);
         //if(d->rank != 0) cerr << d->id << "-" << d->rank <<endl;
 
@@ -101,10 +102,12 @@ void deliver_mpi_msg_kernel(
             //  nodes too far away 
             continue;
         }
-        head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
-        tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
+        head = &d->_mailbox[d->_head];   //(Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
+        tail = &d->_mailbox[d->_tail];   //(Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
+        //tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
         const size_t last_offset = (d->_tail + (max_buffer_size - 1))%max_buffer_size;
-        last = (Mail*)((char*)(&d->_mailbox) + (last_offset)*mail_size);
+        tail = &d->_mailbox[last_offset];   //(Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
+        //last = (Mail*)((char*)(&d->_mailbox) + (last_offset)*mail_size);
         // not empty and inteference 
         if(d->buffer_size > 0
                 && mpi_msg->send_time - last->send_time < latency) {

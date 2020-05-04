@@ -9,14 +9,14 @@ typedef struct MPIMsg {
     double send_range; // how far sending transceiver can send
     double send_time;
     unsigned int size; // how much data is there
-    char data; // message contents
+    char data[256]; // message contents
 } MPIMsg;
 
 typedef struct Mail {
     double send_time;
     bool interference;
     unsigned int size;
-    char data;
+    char data[256];
 } Mail;
 
 typedef struct DeviceData {
@@ -28,7 +28,7 @@ typedef struct DeviceData {
     // meta information for mailbox
     unsigned int _head;
     unsigned int _tail;
-    Mail _mailbox;
+    Mail _mailbox[10];
 } DeviceData;
 
 
