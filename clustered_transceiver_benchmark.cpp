@@ -12,6 +12,7 @@ Use: run.exe <# of trxs/cluster> <latency>
 #include <chrono>
 #include <condition_variable>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <mutex>
 #include <thread>
@@ -32,6 +33,24 @@ using std::endl;
 
 #define _USE_MATH_DEFINES
 
+// Creates isolated clusters of transceivers.
+std::vector<RadioTransceiver*> create_clusters(
+    size_t num_clusters, size_t num_trxs, size_t num_threads_per_block,
+    double latency, MPI_File* send_file_ptr = nullptr,
+    MPI_File* recv_file_ptr = nullptr) {
+    std::vector<RadioTransceiver*> clusters;
+    for (size_t i = 0; i < num_clusters; ++i) {
+        auto trxs = RadioTransceiver::transceivers(
+            num_trxs, latency, num_threads_per_block,
+            send_file_ptr, recv_file_ptr
+        );
+        for (size_t j = 0; j < num_trxs; ++j) {
+            auto& t = trxs[j];
+        }
+        clusters.push_back(trxs);
+    }
+    return clusters;
+}
 /**
  * Generates a random point within a circle centered at (x_center, y_center)
  * of radius r.
@@ -48,10 +67,10 @@ std::pair<double, double> generate_point(
 
 int main(int argc, char** argv) {
     // make sure all arguments exist
-    if (argc != 4 && argc != 5) {
+    if (argc != 5 && argc != 6) {
         std::cout << "Usage: \
         run.exe <# of trxs/cluster> \
-        <latency> <# of threads/block> \
+        <latency> <# of threads/block> <# of clusters/rank>\
         <optional: file-I/O? (0 or 1)>" <<
         std::endl;
         return 1;
@@ -63,6 +82,7 @@ int main(int argc, char** argv) {
     size_t max_packet_size = TRX_PACKET_SIZE;
     size_t latency = atof(argv[2]); // double
     size_t num_threads_per_block = atoi(argv[3]); // later, for CUDA
+    size_t num_clusters = atoi(argv[4]); // # clusters/rank
     bool file_io = 1; // Default behavior is assume file i/o is false
     MPI_File send_file;
     MPI_File* send_file_ptr = &send_file;
@@ -124,6 +144,7 @@ int main(int argc, char** argv) {
         send_file_ptr = nullptr;
         recv_file_ptr = nullptr;
     }
+
     auto trxs = RadioTransceiver::transceivers(
         num_trxs, latency, num_threads_per_block, send_file_ptr, recv_file_ptr
     );
@@ -134,8 +155,9 @@ int main(int argc, char** argv) {
 
     // Initialize the transceivers.
     // Each transceiver is given a location located with radius .4 of location
-    // (i, i), and has a send/recv distance of .8.
+    // (t_id, t_id), and has a send/recv distance of .8.
     // All ith transceivers are in the same cluster as each other across ranks.
+    std::thread cluster[]
     std::pair<double, double> loc;
     for (size_t i = 0; i < num_trxs; ++i) {
         auto& t = trxs[i];
