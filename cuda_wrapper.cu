@@ -82,6 +82,7 @@ __global__ void deliver_mpi_msg_kernel(
         }
 
         DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
+        printf("id: %u\n", d->id); 
         //sanity check
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
