@@ -193,6 +193,18 @@ int main(int argc, char** argv) {
     // Shuts down all transceivers.
     RadioTransceiver::close_transceivers(trxs);
 
+    // Ensure fps are closed if not nullptr
+    if (send_file_ptr != nullptr) {
+        MPI_File_close(
+            send_file_ptr
+        );
+        MPI_File_close(
+            recv_file_ptr
+        );
+        send_file_ptr = nullptr;
+        recv_file_ptr = nullptr;
+    }
+
     // Synchronize MPI ranks.
     MPI_Finalize();
     return 0;
