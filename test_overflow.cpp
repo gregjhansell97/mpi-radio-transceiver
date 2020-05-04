@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     t1.device_data->recv_range = 1;
 
     // ENSURES: ranks are done with adjusting their t0/t1 parameters
-    Transceiver::synchronize_ranks();
+    RadioTransceiver::synchronize_ranks();
     
     char* rcvd;
     if(rank == 0) {

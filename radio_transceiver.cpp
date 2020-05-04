@@ -383,7 +383,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                             sizeof(MPIMsg),
                             MPI_BYTE,
                             0,
-                            MPI_COMM_WORLD)
+                            MPI_COMM_WORLD);
                     for(int i = 0; i < num_ranks; i++) {
                         MPI_Send(mpi_msg, sizeof(MPIMsg), MPI_BYTE,
                             i, 6, MPI_COMM_WORLD);
