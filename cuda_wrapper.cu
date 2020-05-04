@@ -69,12 +69,12 @@ __global__ void deliver_mpi_msg_kernel(
     double dy;
     Mail* head;
     Mail* tail;
-    printf("step: %u\n", step);
-    printf("i: %u\n", i);
-    printf("block-id: %u\n", blockIdx.x);
-    printf("block-dim: %u\n", blockDim.x);
-    printf("thread-idx: %u\n", threadIdx.x);
-    printf("grid-dim: %u\n", gridDim.x);
+    //printf("step: %u\n", step);
+    //printf("i: %u\n", i);
+    //printf("block-id: %u\n", blockIdx.x);
+    //printf("block-dim: %u\n", blockDim.x);
+    //printf("thread-idx: %u\n", threadIdx.x);
+    //printf("grid-dim: %u\n", gridDim.x);
     for(; i < num_trxs; i += step) {
         if(i == 1) {
             printf("ITERATING THROUGH\n");
@@ -85,11 +85,13 @@ __global__ void deliver_mpi_msg_kernel(
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
             // buffer overflow
+            if(i == 1) printf("buffer too big\n");
             continue;
         }
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
             // don't send to self
+            if(i == 1) printf("it matches\n");
             continue;
         }
         // calculate distance
@@ -98,6 +100,7 @@ __global__ void deliver_mpi_msg_kernel(
         dy = mpi_msg->send_y - d->y;
         if(mag*mag < dx*dx + dy*dy) {
             //  nodes too far away 
+            if(i == 1) printf("too far away\n");
             continue;
         }
         // head and tail of queue
@@ -112,8 +115,8 @@ __global__ void deliver_mpi_msg_kernel(
             // set head pointer to have interference
             head->interference = true;
             d->buffer_size += mpi_msg->size;
+            if(i == 1) printf("encountered interference\n");
         } else {
-            printf("got a new message\n");
             tail->send_time = mpi_msg->send_time;
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
@@ -122,6 +125,7 @@ __global__ void deliver_mpi_msg_kernel(
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
             d->buffer_size = d->buffer_size + mpi_msg->size;
+            printf("got a new message\n");
         }
     }
 }
