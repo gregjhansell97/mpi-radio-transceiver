@@ -106,7 +106,7 @@ __global__ void deliver_mpi_msg_kernel(
         }
         // head and tail of queue
         //head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
-        const char* raw_mailbox = (char*)(&d->_mailbox);
+        const char* raw_mailbox = (raw_device_data + i*device_data_size + sizeof(DeviceData) - sizeof(Mail));//(char*)(&d->_mailbox);
         head = (Mail*)(raw_mailbox + d->_head*mail_size);
         tail = (Mail*)(raw_mailbox + d->_tail*mail_size);
         //head = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_head*mail_size]));
