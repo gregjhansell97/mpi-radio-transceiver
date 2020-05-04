@@ -181,13 +181,9 @@ int main(int argc, char** argv) {
             for (size_t i = 0; i < num_trxs; ++i) {
                 if (rcvd_msgs[i] != total_msgs_sent) {
                     auto& t = trxs[i];
-                    int bytes = t.recv(&raw_msg, 0.1);
-                    cout << "rank" << rank << "-clus" << i << " rcvd " <<
-                    bytes << " bytes" << endl;
-                    if (bytes == 14) {
-                    // if (t.recv(&raw_msg, 0) == 14) {
+                    if (t.recv(&raw_msg, 0.1) == 14) {
                         cout << "rank" << rank << "-clus" << i << " rcvd " <<
-                        raw_msg;
+                        raw_msg << endl;
                         rcvd_msgs[i]++;
                         cout << ", " << rcvd_msgs[i] << " total" << endl;
                         local_rcvd_msgs++;

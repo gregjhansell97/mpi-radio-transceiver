@@ -103,7 +103,7 @@ int main(int argc, char** argv) {
     assert(t0.recv(&rcvd, 0.5) == 0);
     assert(t1.recv(&rcvd, 0.5) == 0);
 
-
+    std::cout << "Before close transceiver" << std::endl;
     // Shuts down all the transceivers
     RadioTransceiver::close_transceivers(trxs);
 
