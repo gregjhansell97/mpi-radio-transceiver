@@ -69,17 +69,19 @@ __global__ void deliver_mpi_msg_kernel(
     Mail* head;
     Mail* tail;
     for(; i < num_trxs; i += step) {
+        if(i == 1) {
+            printf("ITERATING THROUGH\n");
+        }
+
         DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
         //sanity check
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
-            d->buffer_size = 69;
             // buffer overflow
             continue;
         }
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
-            d->buffer_size = 42;
             // don't send to self
             continue;
         }
@@ -88,7 +90,6 @@ __global__ void deliver_mpi_msg_kernel(
         dx = mpi_msg->send_x - d->x;
         dy = mpi_msg->send_y - d->y;
         if(mag*mag < dx*dx + dy*dy) {
-            d->buffer_size = 99;
             //  nodes too far away 
             continue;
         }
@@ -104,8 +105,8 @@ __global__ void deliver_mpi_msg_kernel(
             // set head pointer to have interference
             head->interference = true;
             d->buffer_size += mpi_msg->size;
-            d->buffer_size = 45;
         } else {
+            printf("got a new message\n");
             tail->send_time = mpi_msg->send_time;
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
@@ -113,11 +114,7 @@ __global__ void deliver_mpi_msg_kernel(
             memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
-            if(mpi_msg->size == 0) {
-                d->buffer_size = 74;
-            } else {
-                d->buffer_size = d->buffer_size + mpi_msg->size;
-            }
+            d->buffer_size = d->buffer_size + mpi_msg->size;
         }
     }
 }
