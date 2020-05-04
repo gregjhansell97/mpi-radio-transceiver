@@ -2,18 +2,18 @@
 
 
 # separatly copiling the cuda code into an object file
-g++ -c ./cuda_wrapper_laptop.cpp -std=c++17 -Wall
+g++ -c ./cuda_wrapper_laptop.cpp -std=c++11 -Wall
 
-mpic++ ./test_overflow.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++17 -Wall
+mpic++ ./test_overflow.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
+
+mpirun -n 1 ./run.exe
+
+mpic++ ./test_interference.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
 
 mpirun -n 10 ./run.exe
 
-mpic++ ./test_interference.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++17 -Wall
-
-mpirun -n 10 ./run.exe
-
-mpic++ ./test_mobile_transceiver.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++17 -Wall
-mpirun -n 10 ./run.exe
+mpic++ ./test_mobile_transceiver.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
+mpirun -n 1 ./run.exe
 
 rm ./run.exe
 rm ./cuda_wrapper_laptop.o
