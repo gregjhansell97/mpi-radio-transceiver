@@ -49,9 +49,9 @@ std::pair<double, double> generate_point(
 
 int main(int argc, char** argv) {
     // make sure all arguments exist
-    if (argc != 7 && argc != 8) {
+    if (argc != 5 && argc != 6) {
         std::cout << "Usage: \
-        run.exe <# of trxs/cluster> <max buffer size> <max packet size> \
+        run.exe <# of trxs/cluster> \
         <latency> <# of threads/block> <# of clusters> \
         <optional: file-I/O? (0 or 1)>" <<
         std::endl;
@@ -60,14 +60,16 @@ int main(int argc, char** argv) {
 
     // Initialize MPI/CUDA environment variables.
     size_t num_trxs = atoi(argv[1]); // number of trxs per cluster
-    size_t max_buffer_size = atoi(argv[2]);
-    size_t max_packet_size = atoi(argv[3]);
-    size_t latency = atof(argv[4]); // double
-    size_t num_threads_per_block = atoi(argv[5]);
-    size_t num_clusters_per_thread = atoi(argv[6]);
+    size_t max_buffer_size = TRX_BUFFER_SIZE; //atoi(argv[2]);
+    size_t max_packet_size = TRX_PACKET_SIZE; //atoi(argv[3]);
+    size_t latency = atof(argv[2]); // double
+    size_t num_threads_per_block = atoi(argv[3]);
+    size_t num_clusters_per_thread = atoi(argv[4]);
     bool file_io = 1; // Default behavior is assume file i/o is false
-    MPI_File* send_file_ptr = nullptr;
-    MPI_File* recv_file_ptr = nullptr;
+    MPI_File send_file;
+    MPI_File* send_file_ptr = &send_file;
+    MPI_File recv_file;
+    MPI_File* recv_file_ptr = &recv_file;
 
     // Initializes MPI environment.
     if (!MPI_WTIME_IS_GLOBAL) {
@@ -96,7 +98,7 @@ int main(int argc, char** argv) {
     }
 
     // initialize the trxs depending on if file i/o is needed
-    if (argc == 8 && (file_io = atoi(argv[7]) == 0)) { // file i/o needed
+    if (argc == 6 && (file_io = atoi(argv[5]) == 0)) { // file i/o needed
         // set file name based on the current config
         std::string send_file_name = "send_logs_trxs=" + std::to_string(num_trxs) \
          + "_buff=" + std::to_string(max_buffer_size) + "_packet=" + \
@@ -113,19 +115,21 @@ int main(int argc, char** argv) {
             send_file_name.c_str(),
             MPI_MODE_CREATE|MPI_MODE_WRONLY,
             MPI_INFO_NULL,
-            send_file_ptr
+            &send_file
         );
         MPI_File_open(
             MPI_COMM_WORLD,
             recv_file_name.c_str(),
             MPI_MODE_CREATE|MPI_MODE_WRONLY,
             MPI_INFO_NULL,
-            recv_file_ptr
+            &recv_file
         );
+    } else {
+        send_file_ptr = nullptr;
+        recv_file_ptr = nullptr;
     }
     auto trxs = RadioTransceiver::transceivers(
-        num_trxs, max_buffer_size, max_packet_size, latency,
-        num_threads_per_block, send_file_ptr, recv_file_ptr
+        num_trxs, latency, num_threads_per_block, send_file_ptr, recv_file_ptr
     );
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();

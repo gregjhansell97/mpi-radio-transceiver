@@ -33,7 +33,6 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
-    cerr << "num-ranks: " << num_ranks << endl;
 
     // OPEN MPI FILES
     /*
