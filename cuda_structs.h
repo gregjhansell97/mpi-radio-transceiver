@@ -4,30 +4,30 @@
 typedef struct MPIMsg {
     // sender_id and sender_rank used to identify the 'source' of the msg
     int sender_rank;
-    size_t sender_id; // unique id (in the scope of rank)
+    unsigned int sender_id; // unique id (in the scope of rank)
     double send_x, send_y; //location of sending transceiver
     double send_range; // how far sending transceiver can send
     double send_time;
-    size_t size; // how much data is there
+    unsigned int size; // how much data is there
     char data; // message contents
 } MPIMsg;
 
 typedef struct Mail {
     double send_time;
     bool interference;
-    size_t size;
+    unsigned int size;
     char data;
 } Mail;
 
 typedef struct DeviceData {
     int rank;
-    size_t id;
+    unsigned int id;
     double x, y, send_range, recv_range;
     double last_send_time;
-    size_t buffer_size;
+    unsigned int buffer_size;
     // meta information for mailbox
-    size_t _head;
-    size_t _tail;
+    unsigned int _head;
+    unsigned int _tail;
     Mail _mailbox;
 } DeviceData;
 
