@@ -80,7 +80,7 @@ __global__ void deliver_mpi_msg_kernel(
             printf("ITERATING THROUGH\n");
         }
 
-        /*DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
+        DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
         //sanity check
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
@@ -88,6 +88,7 @@ __global__ void deliver_mpi_msg_kernel(
             if(i == 1) printf("buffer too big\n");
             continue;
         }
+        /*
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
             // don't send to self
