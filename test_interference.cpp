@@ -60,13 +60,13 @@ int main(int argc, char** argv) {
     t1.device_data->recv_range = 1;
 
     // ENSURES: ranks are done with adjusting their t0/t1 parameters
-    Transceiver::synchronize_ranks();
+    MPI_Barrier(MPI_COMM_WORLD);
     
     // all ranks attempt to broadcast simultaneously
     const char* msg = "interference\0";
     const size_t num_sends = 3; 
     for(size_t i = 0; i < num_sends; ++i) {
-        Transceiver::synchronize_ranks();
+        MPI_Barrier(MPI_COMM_WORLD);
         msg = "inteference\0";
         t0.send(msg, 12, 0);
         // check that t2 did not receive message 

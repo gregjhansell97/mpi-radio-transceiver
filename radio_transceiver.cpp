@@ -48,6 +48,7 @@ thread* RadioTransceiver::mpi_listener_thread = nullptr;
 // MPI Files
 MPI_File* RadioTransceiver::send_file_ptr = nullptr;
 MPI_File* RadioTransceiver::recv_file_ptr = nullptr;
+MPI_Comm RadioTransceiver::trxs_comm;
 
 
 
@@ -80,7 +81,7 @@ ssize_t RadioTransceiver::send(
     ticks t = getticks();
 #endif
     int status = MPI_Send(&mpi_msg, sizeof(MPIMsg), MPI_BYTE,
-            0, 0, MPI_COMM_WORLD);
+            0, 0, trxs_comm);
     //cerr << "[" << device_data->rank << ", " << device_data->id << "]: " 
     //     << "sent " << size << " bytes" << endl;
 
@@ -109,7 +110,7 @@ ssize_t RadioTransceiver::send(
 
 #ifdef TRX_COMM_EVALUATION_MODE
     status = MPI_Send((char*)(&t), sizeof(ticks), MPI_BYTE,
-            0, 1, MPI_COMM_WORLD);
+            0, 1, trxs_comm);
 #endif
     double sleep = latency;
 
@@ -263,9 +264,13 @@ RadioTransceiver* RadioTransceiver::transceivers(
         << provided_thread_support << "-thread-level support" << std::endl;
         return nullptr; // something went wrong
     } 
+
+    // duplicate
+    MPI_Comm_dup(MPI_COMM_WORLD, &trxs_comm);
+
     // get mpi rank
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+    MPI_Comm_rank(trxs_comm, &rank);
+    MPI_Comm_size(trxs_comm, &num_ranks);
     
     // CUDA INTIAL CONFIGURATIONS
     const int cuda_device_count =  get_cuda_device_count();
@@ -306,36 +311,15 @@ RadioTransceiver* RadioTransceiver::transceivers(
     return trxs;
 }
 
-void RadioTransceiver::synchronize_ranks() {
-    MPIMsg sync;
-    sync.size = TRX_PACKET_SIZE + 1;
-    sync.sender_rank = rank;
-    int s = MPI_Send(&sync, sizeof(MPIMsg), MPI_BYTE,
-            0, 0, MPI_COMM_WORLD);
-    if(s != 0) {
-        cerr << "Sync error, MPI failed to send sync message " 
-             << "status code: " << s << endl;
-    }
-    MPI_Status status;
-    MPI_Recv(
-            &sync,
-            sizeof(MPIMsg),
-            MPI_BYTE,
-            0, 
-            6,
-            MPI_COMM_WORLD,
-            &status);
-}
-
 void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
     // this is where the close message is sent
-    synchronize_ranks();
+    MPI_Barrier(MPI_COMM_WORLD);
     if(rank == 0) {
         MPIMsg poison_pill;
         poison_pill.size = 0;
         // send poison pill
         int status = MPI_Send(&poison_pill, sizeof(MPIMsg), MPI_BYTE,
-                0, 0, MPI_COMM_WORLD);
+                0, 0, trxs_comm);
         if(status != 0) {
             cerr << "Close down error, MPI failed to send poison pill " 
                  << "status code: " << status << endl;
@@ -373,8 +357,9 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     MPI_BYTE,
                     MPI_ANY_SOURCE, 
                     0,
-                    MPI_COMM_WORLD,
+                    trxs_comm,
                     &status);
+<<<<<<< Updated upstream
             if(mpi_msg->size == TRX_PACKET_SIZE + 1) {
                 sync_blocked.insert(mpi_msg->sender_rank);
                 if((int)sync_blocked.size() == num_ranks) {
@@ -392,20 +377,22 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                 }
                 continue;
             }
+=======
+>>>>>>> Stashed changes
             // send to rest of group
             MPI_Bcast(
                     mpi_msg,
                     sizeof(MPIMsg),
                     MPI_BYTE,
                     0,
-                    MPI_COMM_WORLD);
+                    trxs_comm);
 #ifdef TRX_COMM_EVALUATION_MODE
             ticks t = getticks();
             MPI_Status _status;
             if(mpi_msg->size > 0) {
                 ticks send_time;
                 MPI_Recv(&send_time, sizeof(ticks), MPI_BYTE, 
-                        0, 1, MPI_COMM_WORLD, &_status);
+                        0, 1, trxs_comm, &_status);
                 ticks diff = t - send_time;
                 MPI_Send(
                         (char*)&diff, sizeof(ticks), MPI_BYTE, 
@@ -419,13 +406,9 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     sizeof(MPIMsg),
                     MPI_BYTE,
                     0,
-                    MPI_COMM_WORLD);
+                    trxs_comm);
         }
-        if(mpi_msg->size == TRX_PACKET_SIZE + 1) {
-            MPI_Send(mpi_msg, sizeof(MPIMsg), MPI_BYTE,
-                rank, 6, MPI_COMM_WORLD);
-            continue;
-        }else if(mpi_msg->size == 0) {
+        if(mpi_msg->size == 0) {
             // indicates the process should exit
             // release cuda memory
             free_cuda_memory(raw_mpi_msg); 

@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     t1.device_data->recv_range = 1;
 
     // ENSURES: ranks are done with adjusting their t0/t1 parameters
-    RadioTransceiver::synchronize_ranks();
+    MPI_Barrier(MPI_COMM_WORLD);
     
     char* rcvd;
     if(rank == 0) {
@@ -80,9 +80,7 @@ int main(int argc, char** argv) {
     }
     // must wait for rank 0 to finish (pile up the buffers)
     if(rank == 0) cerr << "I've sent everything from 0" << endl;
-    //std::this_thread::sleep_for(seconds(5));
-    RadioTransceiver::synchronize_ranks(); // only gonna crash if latency is BAD
-    //MPI_Barrier(MPI_COMM_WORLD); 
+    MPI_Barrier(MPI_COMM_WORLD);
     ssize_t size;
     if(rank == 0) cerr << "all ready to start receiving" << endl;
     for(size_t i = 0; i < TRX_BUFFER_SIZE; ++i) {

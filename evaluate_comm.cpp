@@ -73,6 +73,8 @@ int main(int argc, char** argv) {
         if(rank == 0) {
             const char* msg = "comm evaluation\0";
             t1.send(msg, 16, 0); 
+
+            MPI_Recv(
             // collection
         } else {
             // just flush out as many messages as possible
@@ -91,28 +93,26 @@ int main(int argc, char** argv) {
     }
 
     RadioTransceiver::close_transceivers(trxs);
-
-    cerr << "Waiting for nodes" << endl;
     MPI_Barrier(MPI_COMM_WORLD);
 #ifdef TRX_COMM_EVALUATION_MODE
-if(rank == 0) {
-    size_t total = 0;
-    ticks diff;
-    MPI_Status _status;
-    int flag = 0;
-    MPI_Iprobe(0, 2, MPI_COMM_WORLD, &flag, &_status);
-    while(flag) {
-        MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
-                0, 2, MPI_COMM_WORLD, &_status);
+    if(rank == 0) {
+        size_t total = 0;
+        ticks diff;
+        MPI_Status _status;
+        int flag = 0;
+        MPI_Iprobe(0, 2, MPI_COMM_WORLD, &flag, &_status);
+        while(flag) {
+            MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
+                    0, 2, MPI_COMM_WORLD, &_status);
+            sum += diff;
+            total += 1;
+        }
         sum += diff;
-        total += 1;
+        double average = -1;
+        if(total != 0) average = sum/(double)total;
+        // iterate through and grab info from rank 0
+        cout << "average mpi time: " << average << endl;
     }
-    sum += diff;
-    double average = -1;
-    if(total != 0) average = sum/(double)total;
-    // iterate through and grab info from rank 0
-    cout << "average mpi time: " << average << endl;
-}
 #endif
 
     if(rank == 0) cout << "done with evaluate_comm" << endl;

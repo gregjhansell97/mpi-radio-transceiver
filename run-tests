@@ -9,15 +9,15 @@ mpic++ ./test_overflow.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./
 mpirun -n 10 ./run.exe
 
 
-#mpic++ ./test_interference.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
+mpic++ ./test_interference.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
 
-#mpirun -n 10 ./run.exe
+mpirun -n 10 ./run.exe
 
-#mpic++ ./test_mobile_transceiver.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
-#mpirun -n 10 ./run.exe
+mpic++ ./test_mobile_transceiver.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
+mpirun -n 10 ./run.exe
 
-#mpic++ ./test_file_io.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
-#mpirun -n 10 ./run.exe
+mpic++ ./test_file_io.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall
+mpirun -n 10 ./run.exe
 
-#rm ./run.exe
-#rm ./cuda_wrapper_laptop.o
+rm ./run.exe
+rm ./cuda_wrapper_laptop.o

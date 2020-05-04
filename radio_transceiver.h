@@ -74,8 +74,6 @@ public:
             const ushort threads_per_block=1,
             MPI_File* send_file_ptr=nullptr, MPI_File* recv_file_ptr=nullptr);
 
-    static void synchronize_ranks();
-
     /**
      * Closes transceivers created by the transceivers template function above
      * and is called only once at the end of the program
@@ -107,6 +105,9 @@ private:
     // File I/O
     static MPI_File* send_file_ptr;
     static MPI_File* recv_file_ptr;
+
+    // World
+    static MPI_Comm trxs_comm;
 
     // can only create transceivers through RadioTransceiver::transceivers
     RadioTransceiver() { }

@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
     assert(rcvd[0] == 'f');
     assert(t1.recv(&rcvd, 0.1) == 0);
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    RadioTransceiver::close_transceivers(trxs);
 
     if(rank == 0) {
         std::set<double> x_positions;
@@ -114,7 +114,6 @@ int main(int argc, char** argv) {
 
 
     // Shuts down all the transceivers
-    RadioTransceiver::close_transceivers(trxs);
 
     if(rank == 0) cout << "test_file_io success!" << endl;
 
