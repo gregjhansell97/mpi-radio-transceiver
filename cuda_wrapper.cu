@@ -104,8 +104,11 @@ __global__ void deliver_mpi_msg_kernel(
             continue;
         }
         // head and tail of queue
-        head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
-        tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
+        //head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
+        head = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_head*mail_size]));
+        //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
+        tail = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_tail*mail_size]));
+        //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
         printf("%f\n", head->send_time);
         // not empty and inteference 
         if(d->buffer_size > 0
