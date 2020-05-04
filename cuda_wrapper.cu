@@ -88,7 +88,6 @@ __global__ void deliver_mpi_msg_kernel(
             if(i == 1) printf("buffer too big\n");
             continue;
         }
-        /*
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
             // don't send to self
@@ -107,7 +106,9 @@ __global__ void deliver_mpi_msg_kernel(
         // head and tail of queue
         head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
         tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
+        printf("%f\n", d->send_time);
         // not empty and inteference 
+        /*
         if(d->buffer_size > 0
                 && mpi_msg->send_time - head->send_time < latency) {
             // NOTE: ^^ should be one before tail not head
