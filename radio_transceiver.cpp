@@ -359,26 +359,6 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0,
                     trxs_comm,
                     &status);
-<<<<<<< Updated upstream
-            if(mpi_msg->size == TRX_PACKET_SIZE + 1) {
-                sync_blocked.insert(mpi_msg->sender_rank);
-                if((int)sync_blocked.size() == num_ranks) {
-                    MPI_Bcast(
-                            mpi_msg,
-                            sizeof(MPIMsg),
-                            MPI_BYTE,
-                            0,
-                            MPI_COMM_WORLD);
-                    for(int i = 0; i < num_ranks; i++) {
-                        MPI_Send(mpi_msg, sizeof(MPIMsg), MPI_BYTE,
-                            i, 6, MPI_COMM_WORLD);
-                    }
-                    sync_blocked.clear();
-                }
-                continue;
-            }
-=======
->>>>>>> Stashed changes
             // send to rest of group
             MPI_Bcast(
                     mpi_msg,
