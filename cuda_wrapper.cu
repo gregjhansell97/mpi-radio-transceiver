@@ -52,51 +52,27 @@ void free_cuda_memory(char* data) {
 
 __global__ void deliver_mpi_msg_kernel(
         const size_t num_trxs,
-        const size_t device_data_size,
-        const size_t mail_size,
-        const size_t max_buffer_size,
-        const size_t packet_size,
         const double latency,
         const double current_time,
-        char* raw_mpi_msg, char* raw_device_data) {
-    printf("mail-size: %u\n", sizeof(Mail));
-    printf("i'm being called\n");
+        MPIMsg* raw_mpi_msg, DeviceData* raw_device_data) {
     // this is where things get fast!
-    MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
     size_t i = (blockIdx.x * blockDim.x) + threadIdx.x;
     const size_t step = blockDim.x * gridDim.x; // total threads in process
     double mag;
     double dx;
     double dy;
-    Mail* head;
-    Mail* tail;
-    //printf("step: %u\n", step);
-    //printf("i: %u\n", i);
-    //printf("block-id: %u\n", blockIdx.x);
-    //printf("block-dim: %u\n", blockDim.x);
-    //printf("thread-idx: %u\n", threadIdx.x);
-    //printf("grid-dim: %u\n", gridDim.x);
-    DeviceData*devices = (DeviceData*)(raw_device_data);
+    Mail* tail; // last open space in queue
+    Mail* last; // last element in queue
     for(; i < num_trxs; i += step) {
-        DeviceData* d = &devices[i];
-        /*
-        if(i == 1) {
-            printf("ITERATING THROUGH\n");
-        }
-
-        DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
-        printf("id: %u\n", d->id); 
-        //sanity check
-        */
-        if(d->buffer_size + mpi_msg->size > max_buffer_size) {
+        DeviceData* d = &device_data[i];
+        assert(d->buffer_size <= TRX_BUFFER_SIZE);
+        if(d->buffer_size + mpi_msg->size > TRX_BUFFER_SIZE) {
             // buffer overflow
-            if(i == 1) printf("buffer too big\n");
             continue;
         }
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
             // don't send to self
-            if(i == 1) printf("it matches\n");
             continue;
         }
         // calculate distance
@@ -105,43 +81,27 @@ __global__ void deliver_mpi_msg_kernel(
         dy = mpi_msg->send_y - d->y;
         if(mag*mag < dx*dx + dy*dy) {
             //  nodes too far away 
-            if(i == 1) printf("too far away\n");
             continue;
         }
-        // head and tail of queue
-        //head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
-        //const char* raw_mailbox = (raw_device_data + i*device_data_size + sizeof(DeviceData) - sizeof(Mail));//(char*)(&d->_mailbox);
-        //head = (Mail*)(raw_mailbox + d->_head*mail_size);
-        //tail = (Mail*)(raw_mailbox + d->_tail*mail_size);
-        //head = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_head*mail_size]));
-        //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
-        //tail = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_tail*mail_size]));
-        //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
-        //printf("but this is okay?\n");
-        //printf("%f\n", *((double*)(raw_mailbox + 2*mail_size)));
-        //printf("it may be...\n");
-        // not empty and inteference 
-        head = &d->_mailbox[d->_head];
         tail = &d->_mailbox[d->_tail];
+        last = &d->_mailbox[(d->_tail + (TRX_BUFFER_SIZE - 1))%TRX_BUFFER_SIZE];
+        // not empty and inteference 
         if(d->buffer_size > 0
-                && mpi_msg->send_time - head->send_time < latency) {
-            // NOTE: ^^ should be one before tail not head
+                && mpi_msg->send_time - last->send_time < latency) {
             // grow leading msg pointer to absorb other msg
-            head->size += mpi_msg->size;
-            // set head pointer to have interference
-            head->interference = true;
+            last->size += mpi_msg->size;
+            // set end pointer to have interference
+            last->interference = true;
             d->buffer_size += mpi_msg->size;
-            if(i == 1) printf("encountered interference\n");
         } else {
             tail->send_time = mpi_msg->send_time;
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
             // copy over data from mpi message to tail
-            //memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
+            memcpy(tail->data, mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
-            d->_tail = (d->_tail + 1)%max_buffer_size;
-            d->buffer_size = d->buffer_size + mpi_msg->size;
-            printf("got a new message\n");
+            d->_tail = (d->_tail + 1)%TRX_BUFFER_SIZE;
+            d->buffer_size += mpi_msg->size;
         }
     }
 }
@@ -150,24 +110,12 @@ void deliver_mpi_msg(
         const unsigned long blocks_count,
         const ushort threads_per_block,
         const size_t num_trxs,
-        const size_t device_data_size,
-        const size_t mail_size,
-        const size_t max_buffer_size,
-        const size_t packet_size,
         const double latency,
         const double current_time,
-        char* raw_mpi_msg, char* raw_device_data) {
-    printf("calling kernel\n");
-    printf("blocks: %u\n", blocks_count);
-    printf("threads: %hu\n", threads_per_block);
+        MPIMsg* mpi_msg, DeviceData* device_data) {
     deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
-            device_data_size,
-            mail_size,
-            max_buffer_size,
-            packet_size,
             latency,
             current_time,
-            raw_mpi_msg, raw_device_data);
-    //synchronize_cuda_devices();
+            mpi_msg, device_data);
 }
