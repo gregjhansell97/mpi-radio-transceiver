@@ -14,8 +14,6 @@ using std::cerr;
 using std::endl;
 
 
-#define BUFFER_SIZE 2048 // buffer gets to full messages dropped
-#define PACKET_SIZE 32 // dont send data past this size
 #define LATENCY 0.0 // ideal time delay between send and recv
 
 int main(int argc, char** argv) {
@@ -37,7 +35,6 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
     cerr << "num-ranks: " << num_ranks << endl;
 
-
     // OPEN MPI FILES
     /*
     MPI_File send_file;
@@ -53,10 +50,7 @@ int main(int argc, char** argv) {
     */
 
     // create two transceivers
-    if(rank == 0) cerr << "creating transceivers" << endl;
-    auto trxs = RadioTransceiver::transceivers(
-            2, BUFFER_SIZE, PACKET_SIZE, LATENCY);
-    if(rank == 0) cerr << "transceivers created" << endl;
+    auto trxs = RadioTransceiver::transceivers(2, LATENCY);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -82,10 +76,10 @@ int main(int argc, char** argv) {
    if(rank == 0) {
         const char* msg0 = "hello 0's\0";
         const char* msg1 = "hello 1's\0";
-        //cout << "rank0-t0 sent " << 
-        t0.send(msg0, 10, 0.1);// << " bytes" << endl; //(msg, size, timeou)
-        //cout << "rank0-t1 sent " << 
-        t1.send(msg1, 10, 0.1);// << " bytes" << endl;
+        cout << "rank0-t0 sent " << 
+        t0.send(msg0, 10, 0.1) << " bytes" << endl; //(msg, size, timeou)
+        cout << "rank0-t1 sent " << 
+        t1.send(msg1, 10, 0.1) << " bytes" << endl;
     } else {
         char* msg;
         // one second timeout

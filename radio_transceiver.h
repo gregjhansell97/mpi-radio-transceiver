@@ -15,9 +15,26 @@
 // LOCAL
 #include "cuda_structs.h"
 
-#if defined(HMAP_COMM_EVALUATION) || defined(HMAP_CUDA_EVALUATION)
-//typedef unsigned long long ticks;
+#ifdef TRX_LAPTOP_MODE
 typedef double ticks;
+static __inline__ ticks getticks(void)
+{
+    return MPI_Wtime();
+}
+#endif
+
+#ifndef TRX_LAPTOP_MODE
+typedef unsigned long long ticks;
+static __inline__ ticks getticks(void)
+{
+    unsigned int tbl, tbu0, tbu1;
+    do {
+        __asm__ __volatile__ ("mftbu %0": "=r"(tbu0));
+        __asm__ __volatile__ ("mftb %0": "=r"(tbl));
+        __asm__ __volatile__ ("mftbu %0": "=r"(tbu1));
+    } while (tbu0 != tbu1);
+    return ((((unsigned long long)tbu0) << 32) | tbl);
+}
 #endif
 
 class RadioTransceiver : public hmap::interface::Communicator {
@@ -27,7 +44,7 @@ public:
         double x, y, time;
         double send_range;
         size_t size;
-        char data;
+        char data[TRX_PACKET_SIZE];
     } SendLogItem;
 
        
@@ -46,8 +63,6 @@ public:
      */
     static RadioTransceiver* transceivers(
             const size_t num_trxs,
-            const size_t max_buffer_size,
-            const size_t packet_size,
             const double latency,
             const ushort threads_per_block=1,
             MPI_File* send_file_ptr=nullptr, MPI_File* recv_file_ptr=nullptr);
@@ -65,15 +80,11 @@ public:
 
 
 private:
-    char* m_rcvd;
+    char m_rcvd[TRX_PACKET_SIZE];
     
     static int rank;
     static size_t num_trxs;
-    static size_t max_buffer_size;
-    static size_t packet_size;
     static double latency;
-    static size_t mail_size;
-    static size_t device_data_size; 
     // cuda specs
     static unsigned long blocks_count;
     static ushort threads_per_block; 
@@ -90,8 +101,7 @@ private:
     RadioTransceiver() { }
 
     static std::condition_variable* mailbox_flag; 
-    static void mpi_listener(
-            RadioTransceiver* trxs);
+    static void mpi_listener(RadioTransceiver* trxs);
 };
 
 #endif // MPI_RADIO_TRANSCEIVER_H

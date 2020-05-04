@@ -1,6 +1,12 @@
 #ifndef CUDA_STRUCTS_H
 #define CUDA_STRUCTS_H
 
+
+
+#define TRX_BUFFER_SIZE 1024
+#define TRX_PACKET_SIZE 16
+
+
 typedef struct MPIMsg {
     // sender_id and sender_rank used to identify the 'source' of the msg
     int sender_rank;
@@ -9,14 +15,14 @@ typedef struct MPIMsg {
     double send_range; // how far sending transceiver can send
     double send_time;
     unsigned int size; // how much data is there
-    char data; // message contents
+    char data[TRX_PACKET_SIZE]; // message contents
 } MPIMsg;
 
 typedef struct Mail {
     double send_time;
     bool interference;
     unsigned int size;
-    char data;
+    char data[TRX_PACKET_SIZE];
 } Mail;
 
 typedef struct DeviceData {
@@ -24,21 +30,12 @@ typedef struct DeviceData {
     unsigned int id;
     double x, y, send_range, recv_range;
     double last_send_time;
-    unsigned int buffer_size;
+    unsigned int buffer_size; // current size of buffer <= TRX_BUFFER_SIZE
     // meta information for mailbox
     unsigned int _head;
     unsigned int _tail;
-    Mail _mailbox;
+    Mail _mailbox[TRX_BUFFER_SIZE]; // worse case this many in mail
 } DeviceData;
-
-
-
-// allocate data for the entire mpi pointer
-// (MPIMsg*)(new char[sizeof(MPIHeader) + amount of data];)
-// free it afterwards
-
-// this is where you could put the queue operations...
-
 
 
 #endif // CUDA_STRUCTS_H

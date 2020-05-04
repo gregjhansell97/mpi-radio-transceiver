@@ -37,7 +37,7 @@ void set_cuda_device(int rank, int cuda_device) {
 
 // allocates memory for cuda
 void allocate_cuda_memory(char** data, const size_t size) {
-    printf(cudaGetErrorName(cudaMallocManaged(data, size)));
+    cudaMallocManaged(data, size);
 }
 
 // wait for all parallel gpu calculations to finish
@@ -52,26 +52,21 @@ void free_cuda_memory(char* data) {
 
 __global__ void deliver_mpi_msg_kernel(
         const size_t num_trxs,
-        const size_t device_data_size,
-        const size_t mail_size,
-        const size_t max_buffer_size,
-        const size_t packet_size,
         const double latency,
         const double current_time,
-        char* raw_mpi_msg, char* raw_device_data) {
+        MPIMsg* raw_mpi_msg, DeviceData* raw_device_data) {
     // this is where things get fast!
-    MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t i = (blockIdx.x * blockDim.x) + threadIdx.x;
     const size_t step = blockDim.x * gridDim.x; // total threads in process
     double mag;
     double dx;
     double dy;
-    Mail* head;
-    Mail* tail;
+    Mail* tail; // last open space in queue
+    Mail* last; // last element in queue
     for(; i < num_trxs; i += step) {
-        DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
-
-        if(d->buffer_size + mpi_msg->size > max_buffer_size) {
+        DeviceData* d = &device_data[i];
+        assert(d->buffer_size <= TRX_BUFFER_SIZE);
+        if(d->buffer_size + mpi_msg->size > TRX_BUFFER_SIZE) {
             // buffer overflow
             continue;
         }
@@ -88,26 +83,25 @@ __global__ void deliver_mpi_msg_kernel(
             //  nodes too far away 
             continue;
         }
-        // head and tail of queue
-        head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
-        tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
+        tail = &d->_mailbox[d->_tail];
+        last = &d->_mailbox[(d->_tail + (TRX_BUFFER_SIZE - 1))%TRX_BUFFER_SIZE];
         // not empty and inteference 
         if(d->buffer_size > 0
-                && mpi_msg->send_time - head->send_time < latency) {
+                && mpi_msg->send_time - last->send_time < latency) {
             // grow leading msg pointer to absorb other msg
-            head->size += mpi_msg->size;
-            // set head pointer to have interference
-            head->interference = true;
+            last->size += mpi_msg->size;
+            // set end pointer to have interference
+            last->interference = true;
             d->buffer_size += mpi_msg->size;
         } else {
-            d->buffer_size += mpi_msg->size;
             tail->send_time = mpi_msg->send_time;
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
             // copy over data from mpi message to tail
-            memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
+            memcpy(tail->data, mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
-            d->_tail = (d->_tail + 1)%max_buffer_size;
+            d->_tail = (d->_tail + 1)%TRX_BUFFER_SIZE;
+            d->buffer_size += mpi_msg->size;
         }
     }
 }
@@ -116,21 +110,12 @@ void deliver_mpi_msg(
         const unsigned long blocks_count,
         const ushort threads_per_block,
         const size_t num_trxs,
-        const size_t device_data_size,
-        const size_t mail_size,
-        const size_t max_buffer_size,
-        const size_t packet_size,
         const double latency,
         const double current_time,
-        char* raw_mpi_msg, char* raw_device_data) {
+        MPIMsg* mpi_msg, DeviceData* device_data) {
     deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
-            device_data_size,
-            mail_size,
-            max_buffer_size,
-            packet_size,
             latency,
             current_time,
-            raw_mpi_msg, raw_device_data);
-    synchronize_cuda_devices();
+            mpi_msg, device_data);
 }

@@ -14,9 +14,7 @@ using std::cerr;
 using std::endl;
 
 
-#define BUFFER_SIZE 2048 // buffer gets to full messages dropped
-#define PACKET_SIZE 32 // dont send data past this size
-#define LATENCY 0.5 // latency is half a second
+#define LATENCY 0.1 // latency is a tenth of second
 
 int main(int argc, char** argv) {
     if(!MPI_WTIME_IS_GLOBAL) {
@@ -42,8 +40,7 @@ int main(int argc, char** argv) {
     if(rank == 0) cout << "starting test_interference" << endl;
 
     // create two transceivers
-    auto trxs = RadioTransceiver::transceivers(
-            2, BUFFER_SIZE, PACKET_SIZE, LATENCY);
+    auto trxs = RadioTransceiver::transceivers(2, LATENCY);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -66,15 +63,21 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD); 
     
     // all ranks attempt to broadcast simultaneously
-    const char* msg = "inteference\0";
-    t0.send(msg, 12, 0);
-    // check that t2 did not receive message 
-    MPI_Barrier(MPI_COMM_WORLD);
+    const char* msg = "interference\0";
+    const size_t num_sends = 3; 
+    for(size_t i = 0; i < num_sends; ++i) {
+        MPI_Barrier(MPI_COMM_WORLD);
+        msg = "inteference\0";
+        t0.send(msg, 12, 0);
+        // check that t2 did not receive message 
+    }
     char* rcvd; 
-    assert(t1.recv(&rcvd, 1) == 0); // no message received
-    assert(rcvd == nullptr);
-    assert(t0.recv(&rcvd, 1) == 0); // no message received
-    assert(rcvd == nullptr);
+    for(size_t i = 0; i < num_sends; ++i) {
+        assert(t1.recv(&rcvd, 1) == 0); // no message received
+        assert(rcvd == nullptr);
+        assert(t0.recv(&rcvd, 1) == 0); // no message received
+        assert(rcvd == nullptr);
+    }
 
 
     // Shuts down all the transceivers

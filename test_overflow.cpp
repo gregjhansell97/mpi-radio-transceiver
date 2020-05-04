@@ -14,8 +14,6 @@ using std::cerr;
 using std::endl;
 
 
-#define BUFFER_SIZE 8 // buffer gets to full messages dropped
-#define PACKET_SIZE 3 // dont send data past this size
 #define LATENCY 0.01 // 10 millisecond pause
 
 int main(int argc, char** argv) {
@@ -42,8 +40,8 @@ int main(int argc, char** argv) {
     if(rank == 0) cout << "starting test_overflow" << endl;
 
     // create two transceivers
-    auto trxs = RadioTransceiver::transceivers(
-            2, BUFFER_SIZE, PACKET_SIZE, LATENCY);
+    auto trxs = RadioTransceiver::transceivers(2, LATENCY);
+
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -67,33 +65,36 @@ int main(int argc, char** argv) {
     
     char* rcvd;
     if(rank == 0) {
-        cerr << "sending t0 data" << std::endl;
-        for(char i = 0; i < BUFFER_SIZE; ++i) {
-            cerr << "sent " << t0.send(&i, 1, 0) << 
-                " number of bytes (" << (int)(i) << ")" << endl;
+        //cerr << "sending t0 data" << std::endl;
+        for(size_t i = 0; i < TRX_BUFFER_SIZE; ++i) {
+            char c = i;
+            t0.send(&c, 1, 0); 
+            //cerr << "sent " << t0.send(&i, 1, 0) << 
+            //    " number of bytes (" << (int)(i) << ")" << endl;
         }
         char overflow = 'a';
-        cerr << "sending t0 extra data " << t0.send(&overflow, 1, 0) << endl;
+        t0.send(&overflow, 1, 0);
+        //cerr << "sending t0 extra data " << t0.send(&overflow, 1, 0) << endl;
     }
     // must wait for rank 0 to finish (pile up the buffers)
     MPI_Barrier(MPI_COMM_WORLD); 
     ssize_t size;
     if(rank == 0) cerr << "all ready to start receiving" << endl;
-    for(char i = 0; i < BUFFER_SIZE; ++i) {
+    for(size_t i = 0; i < TRX_BUFFER_SIZE; ++i) {
         if(rank != 0) {
             size = t0.recv(&rcvd, 1); 
             if(size != 1) {
                 cerr << "[" << (int)(i) << "]-t0-" << rank << ": " << size << endl;
             }
             assert(size == 1);//t0.recv(&rcvd, 1) == 1);
-            assert(*rcvd == i);
+            assert(*rcvd == (char)i);
         }
         size = t1.recv(&rcvd, 1);
         if(size != 1) {
             cerr << "[" << (int)(i) << "]-t1-" << rank << ": " << size << endl;
         }
         assert(size == 1);
-        assert(*rcvd == i);
+        assert(*rcvd == (char)i);
     }
     assert(t0.recv(&rcvd, 0.5) == 0);
     assert(t1.recv(&rcvd, 0.5) == 0);
