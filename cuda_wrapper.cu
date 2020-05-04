@@ -77,6 +77,7 @@ __global__ void deliver_mpi_msg_kernel(
     //printf("thread-idx: %u\n", threadIdx.x);
     //printf("grid-dim: %u\n", gridDim.x);
     for(; i < num_trxs; i += step) {
+        /*
         if(i == 1) {
             printf("ITERATING THROUGH\n");
         }
@@ -104,21 +105,21 @@ __global__ void deliver_mpi_msg_kernel(
             //  nodes too far away 
             if(i == 1) printf("too far away\n");
             continue;
-        }
+        }*/
         // head and tail of queue
         //head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
         const char* raw_mailbox = (raw_device_data + i*device_data_size + sizeof(DeviceData) - sizeof(Mail));//(char*)(&d->_mailbox);
-        head = (Mail*)(raw_mailbox + d->_head*mail_size);
-        tail = (Mail*)(raw_mailbox + d->_tail*mail_size);
+        //head = (Mail*)(raw_mailbox + d->_head*mail_size);
+        //tail = (Mail*)(raw_mailbox + d->_tail*mail_size);
         //head = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_head*mail_size]));
         //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
         //tail = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_tail*mail_size]));
         //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
         printf("but this is okay?\n");
-        printf("%f\n", *((double*)(raw_mailbox + d->_tail*mail_size)));
+        printf("%f\n", *((double*)(raw_mailbox + 2*mail_size)));
         printf("it may be...\n");
         // not empty and inteference 
-        if(d->buffer_size > 0
+        /*if(d->buffer_size > 0
                 && mpi_msg->send_time - head->send_time < latency) {
             // NOTE: ^^ should be one before tail not head
             // grow leading msg pointer to absorb other msg
@@ -139,7 +140,7 @@ __global__ void deliver_mpi_msg_kernel(
             d->_tail = (d->_tail + 1)%max_buffer_size;
             d->buffer_size = d->buffer_size + mpi_msg->size;
             printf("got a new message\n");
-        }
+        } */
     }
 }
 
