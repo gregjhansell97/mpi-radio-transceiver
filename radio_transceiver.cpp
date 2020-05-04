@@ -282,7 +282,7 @@ RadioTransceiver* RadioTransceiver::transceivers(
         sizeof(DeviceData) - sizeof(Mail) + max_buffer_size*(mail_size);
 
     char* raw_device_data = nullptr;
-    allocate_cuda_memory(&raw_device_data, num_trxs*device_data_size);
+    allocate_cuda_memory(&raw_device_data, 3*num_trxs*device_data_size);
     assert(raw_device_data != nullptr);
 
     for(size_t i = 0; i < num_trxs; ++i) {
