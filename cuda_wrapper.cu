@@ -80,7 +80,7 @@ __global__ void deliver_mpi_msg_kernel(
             printf("ITERATING THROUGH\n");
         }
 
-        DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
+        /*DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
         //sanity check
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
@@ -126,7 +126,7 @@ __global__ void deliver_mpi_msg_kernel(
             d->_tail = (d->_tail + 1)%max_buffer_size;
             d->buffer_size = d->buffer_size + mpi_msg->size;
             printf("got a new message\n");
-        }
+        }*/
     }
 }
 
