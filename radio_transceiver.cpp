@@ -57,6 +57,7 @@ ssize_t RadioTransceiver::send(
     } else if(size <= 0) {
         return 0;
     }
+
     MPIMsg mpi_msg;
 
     double current_time = MPI_Wtime();
@@ -77,6 +78,8 @@ ssize_t RadioTransceiver::send(
 #endif
     int status = MPI_Send(&mpi_msg, sizeof(MPIMsg), MPI_BYTE,
             0, 0, MPI_COMM_WORLD);
+    //cerr << "[" << device_data->rank << ", " << device_data->id << "]: " 
+    //     << "sent " << size << " bytes" << endl;
 
     if(status != 0) {
         cerr << "Send failed, MPI failed to send message to leader " 
@@ -88,7 +91,6 @@ ssize_t RadioTransceiver::send(
     status = MPI_Send((char*)(&t), sizeof(ticks), MPI_BYTE,
             0, 1, MPI_COMM_WORLD);
 #endif
-
     double sleep = latency;
 
     /*
@@ -110,7 +112,6 @@ ssize_t RadioTransceiver::send(
     cerr << "send_range: " << item->send_range << endl;
     cerr << "size: " << item->size << endl;
 */
-    //delete [] raw_data; // free up raw data
 
     while(sleep > 0.0) {
         current_time = MPI_Wtime();

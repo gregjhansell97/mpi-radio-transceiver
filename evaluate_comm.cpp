@@ -14,6 +14,7 @@ using std::cerr;
 using std::endl;
 
 
+
 #define LATENCY 0 // ideal time delay between send and recv
 #define SAMPLES 1000 // number of comm is sampled
 
@@ -41,6 +42,7 @@ int main(int argc, char** argv) {
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
     if(rank == 0) cout << "starting evaluate_comm" << endl;
+
 
     auto trxs = RadioTransceiver::transceivers(2, LATENCY, THREADS_PER_BLOCK);
     if(trxs == nullptr) {

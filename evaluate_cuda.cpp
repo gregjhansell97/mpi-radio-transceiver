@@ -1,5 +1,4 @@
 #include "mpi.h"
-
 #include <stdlib.h>
 #include <assert.h>
 #include <chrono>
@@ -69,6 +68,7 @@ int main(int argc, char** argv) {
         t.device_data->recv_range = 0.25;
     }
     // ENSURES: all transceivers done with adjusting their locations
+
 #ifdef TRX_CUDA_EVALUATION_MODE
     ticks sum = 0;
     unsigned long long count = 0;
@@ -109,6 +109,7 @@ int main(int argc, char** argv) {
     RadioTransceiver::close_transceivers(trxs);
 
     // after closing the transceivers grab timing information from mpi
+
 
 #ifdef TRX_CUDA_EVALUATION_MODE
     double average = ((double)sum)/count;

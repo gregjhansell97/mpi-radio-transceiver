@@ -132,7 +132,6 @@ int main(int argc, char** argv) {
             // message received better be only i
             assert(rcvd_msg == i);
             // receive data with a certain timeout
-            
         }
         for(size_t i = 0; i < NUM_TRXS; ++i) {
             auto& t = trxs[i];

@@ -41,6 +41,7 @@ int main(int argc, char** argv) {
 
     // create two transceivers
     auto trxs = RadioTransceiver::transceivers(2, LATENCY);
+
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
