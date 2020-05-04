@@ -11,6 +11,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <set>
 
 // MPI
 #include "mpi.h"
@@ -32,11 +33,13 @@ using std::endl;
 using std::lock_guard;
 using std::mutex;
 using std::unique_lock;
+using std::set;
 
 unsigned long RadioTransceiver::blocks_count = 0;
 ushort RadioTransceiver::threads_per_block = 0; 
 size_t RadioTransceiver::num_trxs = 0;
 double RadioTransceiver::latency = 0;
+int RadioTransceiver::num_ranks = 0; 
 int RadioTransceiver::rank = 0; 
 std::mutex RadioTransceiver::device_mtx;
 
@@ -262,6 +265,7 @@ RadioTransceiver* RadioTransceiver::transceivers(
     } 
     // get mpi rank
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
     
     // CUDA INTIAL CONFIGURATIONS
     const int cuda_device_count =  get_cuda_device_count();
@@ -302,8 +306,30 @@ RadioTransceiver* RadioTransceiver::transceivers(
     return trxs;
 }
 
+void RadioTransceiver::synchronize() {
+    MPIMsg sync;
+    sync.size = TRX_PACKET_SIZE + 1;
+    sync.sender_rank = rank;
+    int s = MPI_Send(&sync, sizeof(MPIMsg), MPI_BYTE,
+            0, 0, MPI_COMM_WORLD);
+    if(s != 0) {
+        cerr << "Sync error, MPI failed to send sync message " 
+             << "status code: " << s << endl;
+    }
+    MPI_Status status;
+    MPI_Recv(
+            &sync,
+            sizeof(MPIMsg),
+            MPI_BYTE,
+            0, 
+            6,
+            MPI_COMM_WORLD,
+            &status);
+}
+
 void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
     // this is where the close message is sent
+    synchronize();
     if(rank == 0) {
         MPIMsg poison_pill;
         poison_pill.size = 0;
@@ -337,6 +363,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
 
     MPI_Status status;
+    set<int> sync_blocked;
     while(true) {
         // create a new shared pointer
         if(rank == 0) {
@@ -349,6 +376,15 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0,
                     MPI_COMM_WORLD,
                     &status);
+            if(mpi_msg->size == TRX_PACKET_SIZE + 1) {
+                /*
+                sync_blocked.insert(mpi_msg->sender_rank);
+                if((int)sync_blocked.size() == num_ranks) {
+
+
+                cerr << mpi_msg->sender_rank << endl;
+                continue;*/
+            }
             // send to rest of group
             MPI_Bcast(
                     mpi_msg,
