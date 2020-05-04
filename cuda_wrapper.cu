@@ -107,9 +107,11 @@ __global__ void deliver_mpi_msg_kernel(
         // head and tail of queue
         //head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
         const char* raw_mailbox = (char*)(&d->_mailbox);
-        head = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_head*mail_size]));
+        head = (Mail*)(raw_mailbox + d->_head*mail_size);
+        tail = (Mail*)(raw_mailbox + d->_tail*mail_size);
+        //head = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_head*mail_size]));
         //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
-        tail = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_tail*mail_size]));
+        //tail = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_tail*mail_size]));
         //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
         printf("%f\n", head->send_time);
         // not empty and inteference 
