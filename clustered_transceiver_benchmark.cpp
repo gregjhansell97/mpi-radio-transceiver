@@ -141,18 +141,18 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < num_trxs; ++i) {
         auto& t = trxs[i];
         // Setting parameters for transceiver t.
-        loc = generate_point(1, 1, .5);
+        loc = generate_point(rank, rank, .4);
         t.device_data->x = loc.first;
         t.device_data->y = loc.second;
-        t.device_data->send_range = .9;
-        t.device_data->recv_range = .9;
+        t.device_data->send_range = .3;
+        t.device_data->recv_range = .3;
     }
 
     // Ensures all transceivers in all ranks are ready before test starts.
     MPI_Barrier(MPI_COMM_WORLD);
 
     // This clustering transceiver benchmark tests as follows:
-    // - create X certain of clusters specified in the CLI args
+    // - create X isolated clusters specified in the CLI args
     // - each cluster has N numbers of trxs (N = total # of trxs/X)
     // - 1 trxs/cluster transmits msgs accummulating to the max buffer size
     // - wait for how long it takes for all trxs to receive all the msgs
@@ -187,7 +187,7 @@ int main(int argc, char** argv) {
     // Record the world's total # of trxs that received the msg.
     if (rank == 0) {
         std::cout << global_elapsed_time/(double)num_ranks <<
-        "(s" << std::endl;
+        "(s)" << std::endl;
     }
 
     // Shuts down all transceivers.
