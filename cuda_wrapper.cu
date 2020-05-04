@@ -113,7 +113,9 @@ __global__ void deliver_mpi_msg_kernel(
         //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
         //tail = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_tail*mail_size]));
         //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
-        printf("%f\n", head->send_time);
+        printf("but this is okay?\n");
+        printf("%f\n", *((double*)tail));
+        printf("it may be...\n");
         // not empty and inteference 
         if(d->buffer_size > 0
                 && mpi_msg->send_time - head->send_time < latency) {
