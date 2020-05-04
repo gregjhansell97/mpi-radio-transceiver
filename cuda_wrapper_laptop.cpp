@@ -142,6 +142,7 @@ void deliver_mpi_msg(
     //cout << "THREADS PER BLOCK: " << threads_per_block << endl;
     //printf("blocks: %lu \n", blocks_count);
     //printf("threads-per-block: %hu \n", threads_per_block);
+    printf("%u\n", mail_size);
     deliver_mpi_msg_kernel(
             num_trxs,
             device_data_size,
