@@ -6,7 +6,7 @@ Description:
   waypoint model.
 Usage:
   mpic++ ./random_waypoint_benchmark.cpp -o run.exe -std=c++11
-  ./run.exe
+  ./run.exe (OPTIONAL: <file-I/O flag = 1>)
 */
 
 // C/C++libraries
@@ -15,6 +15,7 @@ Usage:
 #include <chrono>
 #include <condition_variable>
 #include <cmath>
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -26,7 +27,7 @@ Usage:
 #include "mpi.h"
 
 // MPI RADIO TRANSCEIVER
-#include "mpi_radio_transceiver.hpp"
+#include "radio_transceiver.h"
 
 using std::cout;
 using std::cerr;
@@ -36,9 +37,7 @@ using std::endl;
 #define FILE_NAME "latencies.txt"
 
 // TRXS INIT PARAMS
-#define BUFFER_SIZE 2048   // bytes
-#define PACKET_SIZE 32 // don't send data past this size
-#define LATENCY 0 // mock time delay between send and rcv
+#define LATENCY 0 // (s) mock time delay between send and rcv
 
 // RANDOM WAYPOINT SIMULATION PARAMS
 #define RAND_SEED 52021 // keeps rand way-point paths consistently random
@@ -53,6 +52,7 @@ using std::endl;
 #define SPEED_MAX 20
 #define SPEED_MIN 10
 #define LATENCY_PRECISION 100000 // decimal places to measure latency
+#define NUM_THREADS_PER_BLOCK 1 // for CUDA, later
 
 // Singular component making up a trx's path.
 typedef struct Point {
@@ -113,14 +113,51 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     if (MPI_Comm_size(MPI_COMM_WORLD, &num_ranks) != MPI_SUCCESS) {
-        cout << "Unable to retireve the total number of ranks." << endl;
+        cout << "Unable to retrieve the total number of ranks." << endl;
         return 1;
     }
 
-    auto trxs = MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::transceivers<NUM_TRXS>();
+    // Used if i/o is specified.
+    MPI_File latency_file;
+    MPI_File send_file;
+    MPI_File recv_file;
+    MPI_File* latency_file_ptr = &latency_file;
+    MPI_File* send_file_ptr = &send_file;
+    MPI_File* recv_file_ptr = &recv_file;
+    MPI_File_open(
+        MPI_COMM_WORLD,
+        FILE_NAME,
+        MPI_MODE_CREATE|MPI_MODE_RDWR,
+        MPI_INFO_NULL,
+        &latency_file
+    );
+
+    // opens up if file if i/o specified otherwise, doesn't
+    bool file_io;
+    if (argc == 2 && (file_io = atoi(argv[1]) == 0)) { // yes i/o
+        MPI_File_open(
+            MPI_COMM_WORLD,
+            "send_logs.out",
+            MPI_MODE_CREATE|MPI_MODE_RDWR,
+            MPI_INFO_NULL,
+            &send_file
+        );
+        MPI_File_open(
+            MPI_COMM_WORLD,
+            "recv_logs.out",
+            MPI_MODE_CREATE|MPI_MODE_RDWR,
+            MPI_INFO_NULL,
+            &recv_file
+        );
+    } else {
+        send_file_ptr = nullptr;
+        recv_file_ptr = nullptr;
+    }
+
+    auto trxs = RadioTransceiver::transceivers(
+        NUM_TRXS, LATENCY, NUM_THREADS_PER_BLOCK,
+        send_file_ptr, recv_file_ptr
+    );
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -136,8 +173,8 @@ int main(int argc, char** argv) {
         // Set parameters for trx t.
         // Location is dealt with later in simulation.
         auto& t = trxs[i];
-        t.set_send_range(COMM_RANGE);
-        t.set_recv_range(COMM_RANGE);
+        t.device_data->send_range = COMM_RANGE;
+        t.device_data->recv_range =COMM_RANGE;
     }
 
     // Make sure all ranks' transceivers initialized before proceeding.
@@ -153,7 +190,7 @@ int main(int argc, char** argv) {
     * 
     * A subset of transceivers periodically transmit data. This data is
     * curr_time. The receivers (which are not the senders, and
-    * waiting on separate threads) that are within communication range record
+    * waiting on separate ranks) that are within communication range record
     * the latency for further performance calculation and measures later.
     */
     double start_time; // Simulation start time.
@@ -184,8 +221,8 @@ int main(int argc, char** argv) {
                 double y = p0.y + offset * (p1.y - p0.y);
                 // Access trx corresponding with this move and set new loc
                 auto& t = trxs[i];
-                t.set_x(x);
-                t.set_y(y);
+                t.device_data->x = x;
+                t.device_data->y = y;
             }
         }
 
@@ -203,7 +240,7 @@ int main(int argc, char** argv) {
                     sender.send(msg, 13, SEND_DELAY);
                 }
             }
-        } else { // receives on separate threads wait for info
+        } else { // receives on separate ranks wait for info
             for (size_t i = 0; i < NUM_TRXS; ++i) {
                 auto& t = trxs[i];
                 char* raw_msg; // rcv 1msg/trxs
@@ -250,11 +287,7 @@ int main(int argc, char** argv) {
         for (size_t i = 0; i < num_ranks - 1; ++i) {
             if (rcvs[i] != MPI_SUCCESS) {
                 std::cerr << "Receiving latencies  not succesful" << endl;
-                MPIRadioTransceiver<
-                    BUFFER_SIZE,
-                    PACKET_SIZE,
-                    LATENCY>::
-                    close_transceivers<NUM_TRXS>(trxs);
+                RadioTransceiver::close_transceivers(trxs);
                 MPI_Finalize();
                 return 1;
             }
@@ -309,10 +342,7 @@ int main(int argc, char** argv) {
     }
 
     // TODO calculate standard dev?
-    MPIRadioTransceiver<
-        BUFFER_SIZE,
-        PACKET_SIZE,
-        LATENCY>::close_transceivers<NUM_TRXS>(trxs);
+    RadioTransceiver::close_transceivers(trxs);
     MPI_Finalize();
     return 0;
 }

@@ -315,7 +315,6 @@ void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
                  << "status code: " << status << endl;
         }
     }
-    MPI_Barrier(MPI_COMM_WORLD); // wait till all ranks want to close
     // join the thread;
     mpi_listener_thread->join();
     delete mpi_listener_thread;
@@ -325,6 +324,7 @@ void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
     free_cuda_memory(raw_device_data); 
     delete [] trxs;
     delete mailbox_flag;
+    MPI_Barrier(MPI_COMM_WORLD); // wait till all ranks want to close
 }
 
 
