@@ -47,6 +47,13 @@ public:
         char data[TRX_PACKET_SIZE];
     } SendLogItem;
 
+    typedef struct RecvLogItem {
+        double x, y, time;
+        double recv_range;
+        size_t size;
+        char data[TRX_PACKET_SIZE];
+    } RecvLogItem;
+
        
     ssize_t send(
             const char* data, 
@@ -66,6 +73,9 @@ public:
             const double latency,
             const ushort threads_per_block=1,
             MPI_File* send_file_ptr=nullptr, MPI_File* recv_file_ptr=nullptr);
+
+    static void synchronize();
+
     /**
      * Closes transceivers created by the transceivers template function above
      * and is called only once at the end of the program
@@ -82,6 +92,7 @@ public:
 private:
     char m_rcvd[TRX_PACKET_SIZE];
     
+    static int num_ranks;
     static int rank;
     static size_t num_trxs;
     static double latency;
