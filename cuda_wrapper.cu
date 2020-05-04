@@ -123,6 +123,7 @@ void deliver_mpi_msg(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
+    printf("cuda-size: %u\n", sizeof(MPIMsg));
     deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,
