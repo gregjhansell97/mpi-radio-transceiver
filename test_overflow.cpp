@@ -12,9 +12,11 @@
 using std::cout;
 using std::cerr;
 using std::endl;
+using std::chrono::milliseconds;
+using std::chrono::seconds;
 
 
-#define LATENCY 0.001 // 10 millisecond pause
+#define LATENCY 0 
 
 int main(int argc, char** argv) {
     // Initialize MPI Environment
@@ -78,7 +80,8 @@ int main(int argc, char** argv) {
     }
     // must wait for rank 0 to finish (pile up the buffers)
     if(rank == 0) cerr << "I've sent everything from 0" << endl;
-    MPI_Barrier(MPI_COMM_WORLD); 
+    std::this_thread::sleep_for(seconds(5));
+    //MPI_Barrier(MPI_COMM_WORLD); 
     ssize_t size;
     if(rank == 0) cerr << "all ready to start receiving" << endl;
     for(size_t i = 0; i < TRX_BUFFER_SIZE; ++i) {
