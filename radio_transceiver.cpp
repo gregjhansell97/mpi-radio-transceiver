@@ -194,9 +194,9 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
                 device_data->buffer_size -= head->size;
                 device_data->_head = next_head;
             } else {
-                cerr << "[" << device_data->rank << ", " << device_data->id 
-                     << " ]: received data" << endl;
                 const size_t data_size = head->size;
+                cerr << "[" << device_data->rank << ", " << device_data->id 
+                     << " ]: received data (" << data_size << ")" << endl;
                 memcpy(m_rcvd, &head->data, head->size);
                 {
                     lock_guard<mutex> device_lock(device_mtx);
