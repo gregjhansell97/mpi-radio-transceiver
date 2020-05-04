@@ -59,6 +59,7 @@ __global__ void deliver_mpi_msg_kernel(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
+    printf("mail-size: %u\n", sizeof(Mail));
     printf("i'm being called\n");
     // this is where things get fast!
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
