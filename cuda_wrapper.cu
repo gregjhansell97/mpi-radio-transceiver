@@ -106,9 +106,7 @@ __global__ void deliver_mpi_msg_kernel(
         // head and tail of queue
         head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
         tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
-        printf("I'M HERE");
         printf("%f\n", head->send_time);
-        printf("BUT NOT HERE");
         // not empty and inteference 
         if(d->buffer_size > 0
                 && mpi_msg->send_time - head->send_time < latency) {
@@ -120,9 +118,11 @@ __global__ void deliver_mpi_msg_kernel(
             d->buffer_size += mpi_msg->size;
             if(i == 1) printf("encountered interference\n");
         } else {
+            printf("I'M HERE");
             tail->send_time = mpi_msg->send_time;
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
+            printf("BUT NOT HERE");
             // copy over data from mpi message to tail
             //memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
