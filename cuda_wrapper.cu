@@ -54,7 +54,7 @@ __global__ void deliver_mpi_msg_kernel(
         const size_t num_trxs,
         const double latency,
         const double current_time,
-        MPIMsg* raw_mpi_msg, DeviceData* raw_device_data) {
+        MPIMsg* mpi_msg, DeviceData* device_data) {
     // this is where things get fast!
     size_t i = (blockIdx.x * blockDim.x) + threadIdx.x;
     const size_t step = blockDim.x * gridDim.x; // total threads in process
