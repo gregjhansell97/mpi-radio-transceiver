@@ -75,7 +75,6 @@ __global__ void deliver_mpi_msg_kernel(
     //printf("block-dim: %u\n", blockDim.x);
     //printf("thread-idx: %u\n", threadIdx.x);
     //printf("grid-dim: %u\n", gridDim.x);
-    printf("%u\n", mail_size);
     for(; i < num_trxs; i += step) {
         if(i == 1) {
             printf("ITERATING THROUGH\n");
@@ -125,11 +124,11 @@ __global__ void deliver_mpi_msg_kernel(
             d->buffer_size += mpi_msg->size;
             if(i == 1) printf("encountered interference\n");
         } else {
-            printf("I'M HERE");
+            printf("I'M HERE   -----");
             tail->send_time = mpi_msg->send_time;
+            printf("BUT NOT HERE");
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
-            printf("BUT NOT HERE");
             // copy over data from mpi message to tail
             //memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
