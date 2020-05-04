@@ -75,6 +75,7 @@ __global__ void deliver_mpi_msg_kernel(
     //printf("block-dim: %u\n", blockDim.x);
     //printf("thread-idx: %u\n", threadIdx.x);
     //printf("grid-dim: %u\n", gridDim.x);
+    printf("%u\n", mail_size);
     for(; i < num_trxs; i += step) {
         if(i == 1) {
             printf("ITERATING THROUGH\n");
@@ -105,6 +106,7 @@ __global__ void deliver_mpi_msg_kernel(
         }
         // head and tail of queue
         //head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
+        const char* raw_mailbox = (char*)(&d->_mailbox);
         head = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_head*mail_size]));
         //tail = (Mail*)(((char*)(&d->_mailbox)) + (d->_tail)*mail_size);
         tail = (Mail*)(&(((char*)(&(d->_mailbox)))[d->_tail*mail_size]));
