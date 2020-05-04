@@ -64,52 +64,41 @@ int main(int argc, char** argv) {
     t2.device_data->recv_range = 1;
 
     // ENSURES: all transceivers done with adjusting their locations
-    #ifdef TRX_COMM_EVALUATION_MODE
+#ifdef TRX_COMM_EVALUATION_MODE
     ticks sum = 0;
-    #endif
+#endif
     MPI_Barrier(MPI_COMM_WORLD); 
     ssize_t size;
+    // each loop, sends must be synchronized
     for(size_t i = 0; i < SAMPLES; ++i) {
+        MPI_Barrier(MPI_COMM_WORLD);
         if(rank == 0) {
             const char* msg = "comm evaluation\0";
             t1.send(msg, 16, 0); 
-
-            MPI_Recv(
-            // collection
+#ifdef TRX_COMM_EVALUATION_MODE
+            MPI_Status _status;
+            ticks diff;
+            MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
+                    0, 2, MPI_COMM_WORLD, &_status);
+            sum += diff;
+#endif
         } else {
-            // just flush out as many messages as possible
             char* msg;
-            size = t1.recv(&msg, 0);
-            while(size != 0 && size != -1) {
-                size = t1.recv(&msg, 0);
-            }
+            size = t1.recv(&msg, 1);
+            assert(size == 16);
         }
-        // just flush out as many messages as possible
         char* msg;
-        size = t2.recv(&msg, 0);
-        while(size != 0 && size != -1) {
-            size = t1.recv(&msg, 0);
-        }
+        size = t2.recv(&msg, 1);
+        assert(size == 16);
+        // just flush out as many messages as possible
     }
 
     RadioTransceiver::close_transceivers(trxs);
     MPI_Barrier(MPI_COMM_WORLD);
 #ifdef TRX_COMM_EVALUATION_MODE
     if(rank == 0) {
-        size_t total = 0;
-        ticks diff;
-        MPI_Status _status;
-        int flag = 0;
-        MPI_Iprobe(0, 2, MPI_COMM_WORLD, &flag, &_status);
-        while(flag) {
-            MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
-                    0, 2, MPI_COMM_WORLD, &_status);
-            sum += diff;
-            total += 1;
-        }
-        sum += diff;
-        double average = -1;
-        if(total != 0) average = sum/(double)total;
+        double average = 0;
+        average = ((double)(sum)/SAMPLES);
         // iterate through and grab info from rank 0
         cout << "average mpi time: " << average << endl;
     }
