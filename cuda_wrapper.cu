@@ -107,7 +107,7 @@ __global__ void deliver_mpi_msg_kernel(
             //  nodes too far away 
             if(i == 1) printf("too far away\n");
             continue;
-        }*/
+        }
         // head and tail of queue
         //head = (Mail*)(((char*)(&d->_mailbox)) + (d->_head)*mail_size);
         //const char* raw_mailbox = (raw_device_data + i*device_data_size + sizeof(DeviceData) - sizeof(Mail));//(char*)(&d->_mailbox);
