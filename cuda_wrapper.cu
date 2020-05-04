@@ -61,7 +61,7 @@ __global__ void deliver_mpi_msg_kernel(
         char* raw_mpi_msg, char* raw_device_data) {
     // this is where things get fast!
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t i = (blockIdx.x * blockDim.x) + threadIdx.x;
     const size_t step = blockDim.x * gridDim.x; // total threads in process
     double mag;
     double dx;
@@ -70,6 +70,9 @@ __global__ void deliver_mpi_msg_kernel(
     Mail* tail;
     for(; i < num_trxs; i += step) {
         DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
+        //sanity check
+        d->buffer_size += 1;
+        continue;
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
             // buffer overflow
