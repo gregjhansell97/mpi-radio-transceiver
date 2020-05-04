@@ -425,10 +425,9 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0, 3, MPI_COMM_WORLD);
             #endif
         }
-        cerr << "mpi-size msg: " << sizeof(MPIMsg) << endl;
-        //cerr << "msg size: " << mpi_msg->size << endl;
+        cerr << "msg size: " << mpi_msg->size << endl;
         //cerr << "[0] buffer size: " << trxs[0].device_data->buffer_size << endl;
-        //cerr << "[1] buffer size: " << trxs[1].device_data->buffer_size << endl;
+        cerr << "[1] buffer size: " << trxs[1].device_data->buffer_size << endl;
         //cerr << "[" << rank << "]: "<< "notifying all transceivers" << endl;
         mailbox_flag->notify_all();
         // notify 

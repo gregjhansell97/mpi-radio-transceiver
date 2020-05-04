@@ -111,7 +111,6 @@ void deliver_mpi_msg_kernel(
             head->interference = true;
             d->buffer_size += mpi_msg->size;
         } else {
-            d->buffer_size += mpi_msg->size;
             tail->send_time = mpi_msg->send_time;
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
@@ -119,6 +118,7 @@ void deliver_mpi_msg_kernel(
             memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
+            d->buffer_size += mpi_msg->size;
         }
     }
 }
