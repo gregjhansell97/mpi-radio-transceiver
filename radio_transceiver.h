@@ -40,6 +40,7 @@ static __inline__ ticks getticks(void)
 class RadioTransceiver : public hmap::interface::Communicator {
 public:
 
+    static MPI_Datatype dt_SendLogItem;
     typedef struct SendLogItem {
         double x, y, time;
         double send_range;
@@ -47,6 +48,7 @@ public:
         char data[TRX_PACKET_SIZE];
     } SendLogItem;
 
+    static MPI_Datatype dt_RecvLogItem;
     typedef struct RecvLogItem {
         double x, y, time;
         double recv_range;
@@ -105,6 +107,7 @@ private:
     // File I/O
     static MPI_File* send_file_ptr;
     static MPI_File* recv_file_ptr;
+    static MPI_Datatype dt_MPIMsg;
 
     // World
     static MPI_Comm trxs_comm;

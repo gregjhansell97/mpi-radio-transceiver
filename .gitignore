@@ -6,3 +6,5 @@
 *.ignore
 *.log
 *.o
+
+*.shfp*

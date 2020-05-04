@@ -95,12 +95,13 @@ int main(int argc, char** argv) {
 
     if(rank == 0) {
         std::set<double> x_positions;
-        // check that the output is good
+        // check that send log is good
         for(int i = 0; i < num_ranks; ++i) {
             RadioTransceiver::SendLogItem item;
             item.time = -5; // check that this changes
             MPI_Status status;
-            MPI_File_read(send_file, &item, sizeof(item), MPI_BYTE, &status);
+            MPI_File_read(send_file, &item, 1, 
+                    RadioTransceiver::dt_SendLogItem, &status);
             assert(item.time > 0);
             assert(item.x >= 0 && item.x < num_ranks);
             assert(item.y == 0);
@@ -110,15 +111,31 @@ int main(int argc, char** argv) {
             x_positions.insert(item.x);
         }
         assert((int)x_positions.size() == num_ranks); // no duplicates
+        x_positions.clear();
+        for(int i = 0; i < num_ranks; ++i) {
+            RadioTransceiver::RecvLogItem item;
+            item.time = -5; // check that this changes
+            MPI_Status status;
+            MPI_File_read(recv_file, &item, 1, 
+                    RadioTransceiver::dt_RecvLogItem, &status);
+            assert(item.time > 0);
+            assert(item.x >= 0 && item.x < num_ranks);
+            assert(item.y == 0);
+            assert(item.recv_range = 0.1); 
+            assert(item.size == 8);
+            assert(item.data[4] == '-');
+            x_positions.insert(item.x);
+        }
+        assert((int)x_positions.size() == num_ranks); // no duplicates
     }
 
 
     // Shuts down all the transceivers
+    MPI_File_close(&send_file);
+    MPI_File_close(&recv_file);
 
     if(rank == 0) cout << "test_file_io success!" << endl;
 
-    MPI_File_close(&send_file);
-    MPI_File_close(&recv_file);
     MPI_Finalize();
     return 0;
 }

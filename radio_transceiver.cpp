@@ -49,6 +49,9 @@ thread* RadioTransceiver::mpi_listener_thread = nullptr;
 MPI_File* RadioTransceiver::send_file_ptr = nullptr;
 MPI_File* RadioTransceiver::recv_file_ptr = nullptr;
 MPI_Comm RadioTransceiver::trxs_comm;
+MPI_Datatype RadioTransceiver::dt_RecvLogItem;
+MPI_Datatype RadioTransceiver::dt_SendLogItem;
+MPI_Datatype RadioTransceiver::dt_MPIMsg;
 
 
 
@@ -80,11 +83,8 @@ ssize_t RadioTransceiver::send(
 #ifdef TRX_COMM_EVALUATION_MODE
     ticks t = getticks();
 #endif
-    int status = MPI_Send(&mpi_msg, sizeof(MPIMsg), MPI_BYTE,
+    int status = MPI_Send(&mpi_msg, 1, dt_MPIMsg,
             0, 0, trxs_comm);
-    //cerr << "[" << device_data->rank << ", " << device_data->id << "]: " 
-    //     << "sent " << size << " bytes" << endl;
-
     if(status != 0) {
         cerr << "Send failed, MPI failed to send message to leader " 
              << "status code: " << status << endl;
@@ -99,11 +99,11 @@ ssize_t RadioTransceiver::send(
         item.size = mpi_msg.size;
         memcpy(item.data, mpi_msg.data, size);
         MPI_Status fstatus;
-        MPI_File_write_shared(*send_file_ptr, &item, sizeof(SendLogItem), 
-                MPI_BYTE, &fstatus);
+        MPI_File_write_shared(*send_file_ptr, &item, 1, 
+                dt_SendLogItem, &fstatus);
         int count; 
-        MPI_Get_count(&fstatus, MPI_BYTE, &count);
-        if(count != sizeof(SendLogItem)) {
+        MPI_Get_count(&fstatus, dt_SendLogItem, &count);
+        if(count != 1) {
             cerr << "ERROR: failed to write item to file" << endl;
         }
     }
@@ -203,11 +203,11 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
                     memcpy(item.data, m_rcvd, data_size);
                     MPI_Status fstatus;
                     MPI_File_write_shared(
-                            *send_file_ptr, &item, sizeof(RecvLogItem), 
-                            MPI_BYTE, &fstatus);
+                            *recv_file_ptr, &item, 1,
+                            dt_RecvLogItem, &fstatus);
                     int count; 
-                    MPI_Get_count(&fstatus, MPI_BYTE, &count);
-                    if(count != sizeof(SendLogItem)) {
+                    MPI_Get_count(&fstatus, dt_RecvLogItem, &count);
+                    if(count != 1) {
                         cerr << "ERROR: failed to write item to file" << endl;
                     }
                 }
@@ -271,7 +271,16 @@ RadioTransceiver* RadioTransceiver::transceivers(
     // get mpi rank
     MPI_Comm_rank(trxs_comm, &rank);
     MPI_Comm_size(trxs_comm, &num_ranks);
-    
+
+    // MPI data types
+    MPI_Type_contiguous(sizeof(SendLogItem), MPI_BYTE, &dt_SendLogItem);
+    MPI_Type_contiguous(sizeof(RecvLogItem), MPI_BYTE, &dt_RecvLogItem);
+    MPI_Type_contiguous(sizeof(MPIMsg), MPI_BYTE, &dt_MPIMsg);
+    // commit types
+    MPI_Type_commit(&dt_SendLogItem);
+    MPI_Type_commit(&dt_RecvLogItem);
+    MPI_Type_commit(&dt_MPIMsg);
+
     // CUDA INTIAL CONFIGURATIONS
     const int cuda_device_count =  get_cuda_device_count();
     // attempt to set device based on mpi_rank
@@ -318,7 +327,7 @@ void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
         MPIMsg poison_pill;
         poison_pill.size = 0;
         // send poison pill
-        int status = MPI_Send(&poison_pill, sizeof(MPIMsg), MPI_BYTE,
+        int status = MPI_Send(&poison_pill, 1, dt_MPIMsg,
                 0, 0, trxs_comm);
         if(status != 0) {
             cerr << "Close down error, MPI failed to send poison pill " 
@@ -353,8 +362,8 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
             // waiting on messages
             MPI_Recv(
                     mpi_msg,
-                    sizeof(MPIMsg),
-                    MPI_BYTE,
+                    1,
+                    dt_MPIMsg,
                     MPI_ANY_SOURCE, 
                     0,
                     trxs_comm,
@@ -362,8 +371,8 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
             // send to rest of group
             MPI_Bcast(
                     mpi_msg,
-                    sizeof(MPIMsg),
-                    MPI_BYTE,
+                    1,
+                    dt_MPIMsg,
                     0,
                     trxs_comm);
 #ifdef TRX_COMM_EVALUATION_MODE
@@ -383,8 +392,8 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
             // rest of group receives
             MPI_Bcast(
                     mpi_msg,
-                    sizeof(MPIMsg),
-                    MPI_BYTE,
+                    1,
+                    dt_MPIMsg,
                     0,
                     trxs_comm);
         }
