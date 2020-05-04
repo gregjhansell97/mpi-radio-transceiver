@@ -71,15 +71,15 @@ __global__ void deliver_mpi_msg_kernel(
     for(; i < num_trxs; i += step) {
         DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
         //sanity check
-        d->buffer_size += 1;
-        continue;
 
         if(d->buffer_size + mpi_msg->size > max_buffer_size) {
+            d->buffer_size = 69;
             // buffer overflow
             continue;
         }
         if(mpi_msg->sender_rank == d->rank &&
                 mpi_msg->sender_id == d->id) {
+            d->buffer_size = 42;
             // don't send to self
             continue;
         }
@@ -88,6 +88,7 @@ __global__ void deliver_mpi_msg_kernel(
         dx = mpi_msg->send_x - d->x;
         dy = mpi_msg->send_y - d->y;
         if(mag*mag < dx*dx + dy*dy) {
+            d->buffer_size = 99;
             //  nodes too far away 
             continue;
         }
