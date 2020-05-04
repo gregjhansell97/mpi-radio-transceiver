@@ -70,6 +70,9 @@ int main(int argc, char** argv) {
     t0.send(msg, 12, 0);
     // check that t2 did not receive message 
     MPI_Barrier(MPI_COMM_WORLD);
+    // they do it again
+    t0.send(msg, 12, 0);
+    MPI_Barrier(MPI_COMM_WORLD);
     char* rcvd; 
     assert(t1.recv(&rcvd, 1) == 0); // no message received
     assert(rcvd == nullptr);

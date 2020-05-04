@@ -78,6 +78,7 @@ void deliver_mpi_msg_kernel(
     double dy;
     Mail* head;
     Mail* tail;
+    Mail* last;
     for(; i < num_trxs; i += step) {
         DeviceData* d = (DeviceData*)(raw_device_data + i*device_data_size);
         assert(d->buffer_size <= max_buffer_size);
@@ -102,13 +103,15 @@ void deliver_mpi_msg_kernel(
         }
         head = (Mail*)((char*)(&d->_mailbox) + (d->_head)*mail_size);
         tail = (Mail*)((char*)(&d->_mailbox) + (d->_tail)*mail_size);
+        const size_t last_offset = (d->_tail + (max_buffer_size - 1))%max_buffer_size;
+        last = (Mail*)((char*)(&d->_mailbox) + (last_offset)*mail_size);
         // not empty and inteference 
         if(d->buffer_size > 0
-                && mpi_msg->send_time - head->send_time < latency) {
+                && mpi_msg->send_time - last->send_time < latency) {
             // grow leading msg pointer to absorb other msg
-            head->size += mpi_msg->size;
-            // set head pointer to have interference
-            head->interference = true;
+            last->size += mpi_msg->size;
+            // set end pointer to have interference
+            last->interference = true;
             d->buffer_size += mpi_msg->size;
         } else {
             tail->send_time = mpi_msg->send_time;

@@ -121,7 +121,7 @@ __global__ void deliver_mpi_msg_kernel(
             tail->interference = (d->last_send_time + latency > current_time);
             tail->size = mpi_msg->size;
             // copy over data from mpi message to tail
-            memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
+            //memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
             d->buffer_size = d->buffer_size + mpi_msg->size;
