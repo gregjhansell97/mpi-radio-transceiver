@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
     }
 
     // ENSURES: all transceivers done with adjusting their locations
-    MPI_Barrier(MPI_COMM_WORLD); 
+    Transceiver::synchronize_ranks();
 
     // This Test selects moves around the first transceiver index and sees if
     // where it broadcasts changes

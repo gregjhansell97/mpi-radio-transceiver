@@ -306,7 +306,7 @@ RadioTransceiver* RadioTransceiver::transceivers(
     return trxs;
 }
 
-void RadioTransceiver::synchronize() {
+void RadioTransceiver::synchronize_ranks() {
     MPIMsg sync;
     sync.size = TRX_PACKET_SIZE + 1;
     sync.sender_rank = rank;
@@ -329,7 +329,7 @@ void RadioTransceiver::synchronize() {
 
 void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
     // this is where the close message is sent
-    synchronize();
+    synchronize_ranks();
     if(rank == 0) {
         MPIMsg poison_pill;
         poison_pill.size = 0;
@@ -377,13 +377,21 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     MPI_COMM_WORLD,
                     &status);
             if(mpi_msg->size == TRX_PACKET_SIZE + 1) {
-                /*
                 sync_blocked.insert(mpi_msg->sender_rank);
                 if((int)sync_blocked.size() == num_ranks) {
-
-
-                cerr << mpi_msg->sender_rank << endl;
-                continue;*/
+                    MPI_Bcast(
+                            mpi_msg,
+                            sizeof(MPIMsg),
+                            MPI_BYTE,
+                            0,
+                            MPI_COMM_WORLD)
+                    for(int i = 0; i < num_ranks; i++) {
+                        MPI_Send(mpi_msg, sizeof(MPIMsg), MPI_BYTE,
+                            i, 6, MPI_COMM_WORLD);
+                    }
+                    sync_blocked.clear();
+                }
+                continue;
             }
             // send to rest of group
             MPI_Bcast(
@@ -414,7 +422,11 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0,
                     MPI_COMM_WORLD);
         }
-        if(mpi_msg->size == 0) {
+        if(mpi_msg->size == TRX_PACKET_SIZE + 1) {
+            MPI_Send(mpi_msg, sizeof(MPIMsg), MPI_BYTE,
+                rank, 6, MPI_COMM_WORLD);
+            continue;
+        }else if(mpi_msg->size == 0) {
             // indicates the process should exit
             // release cuda memory
             free_cuda_memory(raw_mpi_msg); 

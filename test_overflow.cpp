@@ -16,7 +16,7 @@ using std::chrono::milliseconds;
 using std::chrono::seconds;
 
 
-#define LATENCY 0 
+#define LATENCY 0.01
 
 int main(int argc, char** argv) {
     // Initialize MPI Environment
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     t1.device_data->recv_range = 1;
 
     // ENSURES: ranks are done with adjusting their t0/t1 parameters
-    MPI_Barrier(MPI_COMM_WORLD); 
+    Transceiver::synchronize_ranks();
     
     char* rcvd;
     if(rank == 0) {
@@ -80,7 +80,8 @@ int main(int argc, char** argv) {
     }
     // must wait for rank 0 to finish (pile up the buffers)
     if(rank == 0) cerr << "I've sent everything from 0" << endl;
-    std::this_thread::sleep_for(seconds(5));
+    //std::this_thread::sleep_for(seconds(5));
+    RadioTransceiver::synchronize_ranks(); // only gonna crash if latency is BAD
     //MPI_Barrier(MPI_COMM_WORLD); 
     ssize_t size;
     if(rank == 0) cerr << "all ready to start receiving" << endl;

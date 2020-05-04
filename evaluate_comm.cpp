@@ -16,7 +16,7 @@ using std::endl;
 
 
 #define LATENCY 0 // ideal time delay between send and recv
-#define SAMPLES 1000 // number of comm is sampled
+#define SAMPLES 100 // number of comm is sampled
 
 #define THREADS_PER_BLOCK 1 // cuda is not the conscern here
 
@@ -74,38 +74,46 @@ int main(int argc, char** argv) {
             const char* msg = "comm evaluation\0";
             t1.send(msg, 16, 0); 
             // collection
-            #ifdef TRX_COMM_EVALUATION_MODE
-            ticks diff;
-            MPI_Status _status;
-            MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
-                        0, 2, MPI_COMM_WORLD, &_status);
-            sum += diff;
-            #endif
         } else {
             // just flush out as many messages as possible
             char* msg;
             size = t1.recv(&msg, 0);
-            while(size != 0) {
+            while(size != 0 && size != -1) {
                 size = t1.recv(&msg, 0);
             }
         }
         // just flush out as many messages as possible
         char* msg;
         size = t2.recv(&msg, 0);
-        while(size != 0) {
+        while(size != 0 && size != -1) {
             size = t1.recv(&msg, 0);
         }
     }
 
     RadioTransceiver::close_transceivers(trxs);
 
-    // after closing the transceivers grab timing information from mpi
-
-    #ifdef TRX_COMM_EVALUATION_MODE
-    double average = sum/SAMPLES;
+    cerr << "Waiting for nodes" << endl;
+    MPI_Barrier(MPI_COMM_WORLD);
+#ifdef TRX_COMM_EVALUATION_MODE
+if(rank == 0) {
+    size_t total = 0;
+    ticks diff;
+    MPI_Status _status;
+    int flag = 0;
+    MPI_Iprobe(0, 2, MPI_COMM_WORLD, &flag, &_status);
+    while(flag) {
+        MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
+                0, 2, MPI_COMM_WORLD, &_status);
+        sum += diff;
+        total += 1;
+    }
+    sum += diff;
+    double average = -1;
+    if(total != 0) average = sum/(double)total;
     // iterate through and grab info from rank 0
-    if(rank == 0) cout << "average mpi time: " << average << endl;
-    #endif
+    cout << "average mpi time: " << average << endl;
+}
+#endif
 
     if(rank == 0) cout << "done with evaluate_comm" << endl;
     MPI_Finalize();
