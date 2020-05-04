@@ -115,7 +115,7 @@ __global__ void deliver_mpi_msg_kernel(
             if(mpi_msg->size == 0) {
                 d->buffer_size = 74;
             } else {
-                d->buffer_size += mpi_msg->size;
+                d->buffer_size = d->buffer_size + mpi_msg->size + 1;
             }
         }
     }
