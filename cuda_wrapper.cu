@@ -68,6 +68,12 @@ __global__ void deliver_mpi_msg_kernel(
     double dy;
     Mail* head;
     Mail* tail;
+    printf("step: %u\n", step);
+    printf("i: %u\n", i);
+    printf("block-id: %u\n", blockIdx.x);
+    printf("block-dim: %u\n", blockDim.x);
+    printf("block-idx: %u\n", threadIdx.x);
+    printf("grid-dim: %u\n", gridDim.x);
     for(; i < num_trxs; i += step) {
         if(i == 1) {
             printf("ITERATING THROUGH\n");
