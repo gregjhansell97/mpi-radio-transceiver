@@ -86,32 +86,29 @@ ssize_t RadioTransceiver::send(
              << "status code: " << status << endl;
         return -1; 
     }
+    if(send_file_ptr != nullptr) {
+        SendLogItem item;
+        item.x = mpi_msg.send_x;
+        item.y = mpi_msg.send_y;
+        item.time = mpi_msg.send_time;
+        item.send_range = mpi_msg.send_range;
+        item.size = mpi_msg.size;
+        memcpy(item.data, mpi_msg.data, size);
+        MPI_Status fstatus;
+        MPI_File_write_shared(*send_file_ptr, &item, sizeof(SendLogItem), 
+                MPI_BYTE, &fstatus);
+        int count; 
+        MPI_Get_count(&fstatus, MPI_BYTE, &count);
+        if(count != sizeof(SendLogItem)) {
+            cerr << "ERROR: failed to write item to file" << endl;
+        }
+    }
 
 #ifdef TRX_COMM_EVALUATION_MODE
     status = MPI_Send((char*)(&t), sizeof(ticks), MPI_BYTE,
             0, 1, MPI_COMM_WORLD);
 #endif
     double sleep = latency;
-
-    /*
-    // recycle old raw data
-    const int offset = sizeof(MPIMsg) - sizeof(SendLogItem);
-    assert(offset > 0);
-    SendLogItem* item = (SendLogItem*)(raw_data + offset);
-    // re-populate information
-    item->x = device->x;
-    item->y = device->y;
-    item->time = current_time;
-    item->send_range = device->send_range;
-    const size_t send_log_item = sizeof(SendLogItem) + (size - 1);
-    char* raw_data = new char[mpi_msg_size];
-    cerr << "rank: " << rank << endl;
-    cerr << "x: " << item->x << endl;
-    cerr << "y: " << item->x << endl;
-    cerr << "time: " << item->time << endl;
-    cerr << "send_range: " << item->send_range << endl;
-    cerr << "size: " << item->size << endl;
-*/
 
     while(sleep > 0.0) {
         current_time = MPI_Wtime();
@@ -192,6 +189,25 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
                     device_data->_head = next_head;
                 }
                 *data = m_rcvd;
+                /*
+                if(recv_file_ptr != nullptr) {
+                    RecvLogItem item;
+                    item.x = mpi_msg.send_x;
+                    item.y = mpi_msg.send_y;
+                    item.time = mpi_msg.send_time;
+                    item.send_range = mpi_msg.send_range;
+                    item.size = mpi_msg.size;
+                    memcpy(item.data, mpi_msg.data, size);
+                    MPI_Status fstatus;
+                    MPI_File_write_shared(
+                            *send_file_ptr, &item, sizeof(SendLogItem), 
+                            MPI_BYTE, &fstatus);
+                    int count; 
+                    MPI_Get_count(&fstatus, MPI_BYTE, &count);
+                    if(count != sizeof(SendLogItem)) {
+                        cerr << "ERROR: failed to write item to file" << endl;
+                    }
+                }*/
                 return data_size;
             }
             sleep -= (MPI_Wtime() - current_time);
