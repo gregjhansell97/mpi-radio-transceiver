@@ -74,7 +74,7 @@ public:
             const ushort threads_per_block=1,
             MPI_File* send_file_ptr=nullptr, MPI_File* recv_file_ptr=nullptr);
 
-    static void synchronize();
+    static void synchronize_ranks();
 
     /**
      * Closes transceivers created by the transceivers template function above
