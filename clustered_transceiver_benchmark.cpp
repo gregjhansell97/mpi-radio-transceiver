@@ -161,7 +161,6 @@ int main(int argc, char** argv) {
     // - 1 trxs/cluster transmits msgs accummulating to the max buffer size
     // - wait for how long it takes for all trxs to receive all the msgs
     // - reduces and spits out average latency time across clusters
-
     size_t total_bytes_sent = 0;
     auto& sender = trxs[0];
     double start_time = MPI_Wtime(); // track how long it takes to rcv all msgs
