@@ -59,6 +59,7 @@ __global__ void deliver_mpi_msg_kernel(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
+    printf("i'm being called\n");
     // this is where things get fast!
     MPIMsg* mpi_msg = (MPIMsg*)(raw_mpi_msg);
     size_t i = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -72,7 +73,7 @@ __global__ void deliver_mpi_msg_kernel(
     printf("i: %u\n", i);
     printf("block-id: %u\n", blockIdx.x);
     printf("block-dim: %u\n", blockDim.x);
-    printf("block-idx: %u\n", threadIdx.x);
+    printf("thread-idx: %u\n", threadIdx.x);
     printf("grid-dim: %u\n", gridDim.x);
     for(; i < num_trxs; i += step) {
         if(i == 1) {
@@ -136,6 +137,9 @@ void deliver_mpi_msg(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
+    printf("calling kernel\n");
+    printf("blocks: %u\n", blocks_count);
+    printf("threads: %hu\n", threads_per_count);
     deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,
