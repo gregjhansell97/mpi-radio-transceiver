@@ -1,4 +1,6 @@
 #include "mpi.h"
+
+#include <stdlib.h>
 #include <assert.h>
 #include <chrono>
 #include <iostream>
@@ -14,13 +16,9 @@ using std::cerr;
 using std::endl;
 
 
-#define NUM_TRXS 256
-#define BUFFER_SIZE 2048 // buffer gets to full messages dropped
-#define PACKET_SIZE 16 // dont send data past this size
+#define NUM_TRXS 2048
 #define LATENCY 0 // ideal time delay between send and recv
 #define SAMPLES 100 // number of comm is sampled
-
-#define THREADS_PER_BLOCK 1 // adjust to get different results
 
 int main(int argc, char** argv) {
     if(!MPI_WTIME_IS_GLOBAL) {
@@ -43,10 +41,17 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
-    if(rank == 0) cout << "starting evaluate_cuda" << endl;
 
-    auto trxs = RadioTransceiver::transceivers(
-            NUM_TRXS, BUFFER_SIZE, PACKET_SIZE, LATENCY, THREADS_PER_BLOCK);
+    // take in arguments
+    const size_t num_threads_per_block = atoi(argv[1]);
+
+
+    if(rank == 0) {
+        cout << "starting evaluate_cuda (" 
+             << num_threads_per_block << ")" << endl;
+    }
+
+    auto trxs = RadioTransceiver::transceivers(NUM_TRXS, LATENCY, num_threads_per_block);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -64,13 +69,13 @@ int main(int argc, char** argv) {
         t.device_data->recv_range = 0.25;
     }
     // ENSURES: all transceivers done with adjusting their locations
-    #ifdef HMAP_CUDA_EVALUATION
+#ifdef TRX_CUDA_EVALUATION_MODE
     ticks sum = 0;
     unsigned long long count = 0;
     ticks diff;
     MPI_Status _status;
     int have_messages;
-    #endif
+#endif
     MPI_Barrier(MPI_COMM_WORLD); 
     ssize_t size;
     char* msg;
@@ -79,7 +84,7 @@ int main(int argc, char** argv) {
             const char* msg = "cuda evaluation\0";
             trxs[0].send(msg, 16, 0); 
             // collection
-            #ifdef HMAP_CUDA_EVALUATION
+#ifdef TRX_CUDA_EVALUATION_MODE
             MPI_Iprobe(MPI_ANY_SOURCE, 3, MPI_COMM_WORLD, &have_messages, &_status); 
             while(have_messages) {
 
@@ -90,7 +95,7 @@ int main(int argc, char** argv) {
 
                 MPI_Iprobe(MPI_ANY_SOURCE, 3, MPI_COMM_WORLD, &have_messages, &_status); 
             }
-            #endif
+#endif
         } 
         // flushout transceivers
         for(size_t i = 0; i < NUM_TRXS; ++i) {
@@ -105,11 +110,11 @@ int main(int argc, char** argv) {
 
     // after closing the transceivers grab timing information from mpi
 
-    #ifdef HMAP_CUDA_EVALUATION
+#ifdef TRX_CUDA_EVALUATION_MODE
     double average = ((double)sum)/count;
     // iterate through and grab info from rank 0
     if(rank == 0) cout << "average cuda time: " << average << endl;
-    #endif
+#endif
 
     if(rank == 0) cout << "done with evaluate_cuda" << endl;
     MPI_Finalize();

@@ -47,21 +47,6 @@ MPI_File* RadioTransceiver::send_file_ptr = nullptr;
 MPI_File* RadioTransceiver::recv_file_ptr = nullptr;
 
 
-#if defined(TRX_COMM_EVALUATION_MODE) || defined(TRX_CUDA_EVALUATION_MODE)
-static __inline__ ticks getticks(void)
-{
-    return MPI_Wtime();
-    /*
-    unsigned int tbl, tbu0, tbu1;
-    do {
-        __asm__ __volatile__ ("mftbu %0": "=r"(tbu0));
-        __asm__ __volatile__ ("mftb %0": "=r"(tbl));
-        __asm__ __volatile__ ("mftbu %0": "=r"(tbu1));
-    } while (tbu0 != tbu1);
-    return ((((unsigned long long)tbu0) << 32) | tbl);
-    */
-}
-#endif
 
 ssize_t RadioTransceiver::send(
         const char* data, const size_t size, const double timeout) {

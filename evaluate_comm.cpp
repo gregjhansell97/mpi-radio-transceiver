@@ -14,8 +14,6 @@ using std::cerr;
 using std::endl;
 
 
-#define BUFFER_SIZE 2048 // buffer gets to full messages dropped
-#define PACKET_SIZE 16 // dont send data past this size
 #define LATENCY 0 // ideal time delay between send and recv
 #define SAMPLES 1000 // number of comm is sampled
 
@@ -44,8 +42,7 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
     if(rank == 0) cout << "starting evaluate_comm" << endl;
 
-    auto trxs = RadioTransceiver::transceivers(
-            2, BUFFER_SIZE, PACKET_SIZE, LATENCY, THREADS_PER_BLOCK);
+    auto trxs = RadioTransceiver::transceivers(2, LATENCY, THREADS_PER_BLOCK);
     if(trxs == nullptr) {
         // could not get transceivers
         MPI_Finalize();
@@ -65,7 +62,7 @@ int main(int argc, char** argv) {
     t2.device_data->recv_range = 1;
 
     // ENSURES: all transceivers done with adjusting their locations
-    #ifdef HMAP_COMM_EVALUATION
+    #ifdef TRX_COMM_EVALUATION_MODE
     ticks sum = 0;
     #endif
     MPI_Barrier(MPI_COMM_WORLD); 
@@ -75,7 +72,7 @@ int main(int argc, char** argv) {
             const char* msg = "comm evaluation\0";
             t1.send(msg, 16, 0); 
             // collection
-            #ifdef HMAP_COMM_EVALUATION
+            #ifdef TRX_COMM_EVALUATION_MODE
             ticks diff;
             MPI_Status _status;
             MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
@@ -102,7 +99,7 @@ int main(int argc, char** argv) {
 
     // after closing the transceivers grab timing information from mpi
 
-    #ifdef HMAP_COMM_EVALUATION
+    #ifdef TRX_COMM_EVALUATION_MODE
     double average = sum/SAMPLES;
     // iterate through and grab info from rank 0
     if(rank == 0) cout << "average mpi time: " << average << endl;

@@ -15,9 +15,26 @@
 // LOCAL
 #include "cuda_structs.h"
 
-#if defined(HMAP_COMM_EVALUATION) || defined(HMAP_CUDA_EVALUATION)
-//typedef unsigned long long ticks;
+#ifdef TRX_LAPTOP_MODE
 typedef double ticks;
+static __inline__ ticks getticks(void)
+{
+    return MPI_Wtime();
+}
+#endif
+
+#ifndef TRX_LAPTOP_MODE
+typedef unsigned long long ticks;
+static __inline__ ticks getticks(void)
+{
+    unsigned int tbl, tbu0, tbu1;
+    do {
+        __asm__ __volatile__ ("mftbu %0": "=r"(tbu0));
+        __asm__ __volatile__ ("mftb %0": "=r"(tbl));
+        __asm__ __volatile__ ("mftbu %0": "=r"(tbu1));
+    } while (tbu0 != tbu1);
+    return ((((unsigned long long)tbu0) << 32) | tbl);
+}
 #endif
 
 class RadioTransceiver : public hmap::interface::Communicator {
