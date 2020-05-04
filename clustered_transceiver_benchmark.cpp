@@ -34,7 +34,10 @@ using std::endl;
 #define _USE_MATH_DEFINES
 
 // Creates isolated clusters of transceivers.
-std::vector<RadioTransceiver*> create_clusters(
+// Each transceiver is given a location located with radius .4 of location
+// (t_id, t_id), and has a send/recv distance of .8.
+// All ith transceivers are in the same cluster as each other across ranks.
+void create_clusters(
     size_t num_clusters, size_t num_trxs, size_t num_threads_per_block,
     double latency, MPI_File* send_file_ptr = nullptr,
     MPI_File* recv_file_ptr = nullptr) {
@@ -46,11 +49,18 @@ std::vector<RadioTransceiver*> create_clusters(
         );
         for (size_t j = 0; j < num_trxs; ++j) {
             auto& t = trxs[j];
+            // setting params for trx on cluster i
+            loc = generate_point(i, i, .4);
+            t.device_data->x = loc.first;
+            t.device_data->y = loc.second;
+            t.device_data->send_range = .3;
+            t.device_data->recv_range = .3;
         }
         clusters.push_back(trxs);
     }
     return clusters;
 }
+
 /**
  * Generates a random point within a circle centered at (x_center, y_center)
  * of radius r.
@@ -145,9 +155,13 @@ int main(int argc, char** argv) {
         recv_file_ptr = nullptr;
     }
 
-    auto trxs = RadioTransceiver::transceivers(
-        num_trxs, latency, num_threads_per_block, send_file_ptr, recv_file_ptr
-    );
+    // grab this thread's cluster of trxs
+    std::promise<RadioTransceiver*> prms;
+    std::future<RadioTransceiver*> trxs = prms.get_future();
+    std::thread th(&create_clusters)
+   auto future = std::async(create_clusters, num_clusters, num_trxs,
+    num_threads_per_block, latency, send_file_ptr, recv_file_ptr);
+   std::vector<RadioTransceiver*> clusters = clusters.get();
     if (trxs == nullptr) { // Unable to retrieve transceivers.
         MPI_Finalize();
         return 1;
@@ -157,7 +171,6 @@ int main(int argc, char** argv) {
     // Each transceiver is given a location located with radius .4 of location
     // (t_id, t_id), and has a send/recv distance of .8.
     // All ith transceivers are in the same cluster as each other across ranks.
-    std::thread cluster[]
     std::pair<double, double> loc;
     for (size_t i = 0; i < num_trxs; ++i) {
         auto& t = trxs[i];
