@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
         //cerr << "sending t0 extra data " << t0.send(&overflow, 1, 0) << endl;
     }
     // must wait for rank 0 to finish (pile up the buffers)
+    if(rank == 0) cerr << "I've sent everything from 0" << endl;
     MPI_Barrier(MPI_COMM_WORLD); 
     ssize_t size;
     if(rank == 0) cerr << "all ready to start receiving" << endl;
