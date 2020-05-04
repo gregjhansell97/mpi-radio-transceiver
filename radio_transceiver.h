@@ -98,7 +98,7 @@ private:
     static double latency;
     // cuda specs
     static unsigned long blocks_count;
-    static ushort threads_per_block; 
+    static ushort threads_per_block;
 
     // listener spins up and on a loop of MPI receives until close_mpi_listener
     // is called
@@ -111,7 +111,7 @@ private:
     // can only create transceivers through RadioTransceiver::transceivers
     RadioTransceiver() { }
 
-    static std::condition_variable* mailbox_flag; 
+    static std::condition_variable* mailbox_flag;
     static void mpi_listener(RadioTransceiver* trxs);
 };
 

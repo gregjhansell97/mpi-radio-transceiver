@@ -39,7 +39,7 @@ unsigned long RadioTransceiver::blocks_count = 0;
 ushort RadioTransceiver::threads_per_block = 0; 
 size_t RadioTransceiver::num_trxs = 0;
 double RadioTransceiver::latency = 0;
-int RadioTransceiver::num_ranks = 0; 
+int RadioTransceiver::num_ranks = 0;
 int RadioTransceiver::rank = 0; 
 std::mutex RadioTransceiver::device_mtx;
 
@@ -313,7 +313,7 @@ void RadioTransceiver::synchronize_ranks() {
     int s = MPI_Send(&sync, sizeof(MPIMsg), MPI_BYTE,
             0, 0, MPI_COMM_WORLD);
     if(s != 0) {
-        cerr << "Sync error, MPI failed to send sync message " 
+        cerr << "Sync error, MPI failed to send sync message "
              << "status code: " << s << endl;
     }
     MPI_Status status;
@@ -321,7 +321,7 @@ void RadioTransceiver::synchronize_ranks() {
             &sync,
             sizeof(MPIMsg),
             MPI_BYTE,
-            0, 
+            0,
             6,
             MPI_COMM_WORLD,
             &status);
