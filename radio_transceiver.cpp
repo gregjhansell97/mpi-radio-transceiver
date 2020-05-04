@@ -189,25 +189,24 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
                     device_data->_head = next_head;
                 }
                 *data = m_rcvd;
-                /*
                 if(recv_file_ptr != nullptr) {
                     RecvLogItem item;
-                    item.x = mpi_msg.send_x;
-                    item.y = mpi_msg.send_y;
-                    item.time = mpi_msg.send_time;
-                    item.send_range = mpi_msg.send_range;
-                    item.size = mpi_msg.size;
-                    memcpy(item.data, mpi_msg.data, size);
+                    item.x = device_data->x;
+                    item.y = device_data->y;
+                    item.time = MPI_Wtime();
+                    item.recv_range = device_data->recv_range;
+                    item.size = data_size;
+                    memcpy(item.data, m_rcvd, data_size);
                     MPI_Status fstatus;
                     MPI_File_write_shared(
-                            *send_file_ptr, &item, sizeof(SendLogItem), 
+                            *send_file_ptr, &item, sizeof(RecvLogItem), 
                             MPI_BYTE, &fstatus);
                     int count; 
                     MPI_Get_count(&fstatus, MPI_BYTE, &count);
                     if(count != sizeof(SendLogItem)) {
                         cerr << "ERROR: failed to write item to file" << endl;
                     }
-                }*/
+                }
                 return data_size;
             }
             sleep -= (MPI_Wtime() - current_time);
@@ -304,7 +303,6 @@ RadioTransceiver* RadioTransceiver::transceivers(
 }
 
 void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
-    MPI_Barrier(MPI_COMM_WORLD); // wait till all ranks want to close
     // this is where the close message is sent
     if(rank == 0) {
         MPIMsg poison_pill;
@@ -317,6 +315,7 @@ void RadioTransceiver::close_transceivers(RadioTransceiver* trxs) {
                  << "status code: " << status << endl;
         }
     }
+    MPI_Barrier(MPI_COMM_WORLD); // wait till all ranks want to close
     // join the thread;
     mpi_listener_thread->join();
     delete mpi_listener_thread;
