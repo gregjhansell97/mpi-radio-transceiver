@@ -124,7 +124,8 @@ void deliver_mpi_msg(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
-    deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
+    //deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
+    deliver_mpi_msg_kernel<<<1, 1>>>(
             num_trxs,
             device_data_size,
             mail_size,
