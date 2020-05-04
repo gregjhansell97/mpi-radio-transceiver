@@ -148,5 +148,4 @@ void deliver_mpi_msg(
             latency,
             current_time,
             raw_mpi_msg, raw_device_data);
-    synchronize_cuda_devices();
 }

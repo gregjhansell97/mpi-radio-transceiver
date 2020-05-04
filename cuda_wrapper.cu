@@ -112,7 +112,11 @@ __global__ void deliver_mpi_msg_kernel(
             memcpy(&tail->data, &mpi_msg->data, mpi_msg->size);
             // adjust tail to next open spot
             d->_tail = (d->_tail + 1)%max_buffer_size;
-            d->buffer_size += mpi_msg->size;
+            if(mpi_msg->size == 0) {
+                d->buffer_size = 74;
+            } else {
+                d->buffer_size += mpi_msg->size;
+            }
         }
     }
 }
@@ -128,8 +132,7 @@ void deliver_mpi_msg(
         const double latency,
         const double current_time,
         char* raw_mpi_msg, char* raw_device_data) {
-    //deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
-    deliver_mpi_msg_kernel<<<1, 1>>>(
+    deliver_mpi_msg_kernel<<<blocks_count, threads_per_block>>>(
             num_trxs,
             device_data_size,
             mail_size,

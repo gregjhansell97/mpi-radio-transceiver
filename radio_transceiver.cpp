@@ -418,6 +418,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     latency,
                     MPI_Wtime(),
                     (char*)(mpi_msg), (char*)(trxs[0].device_data));
+            synchronize_cuda_devices();
             #ifdef HMAP_CUDA_EVALUATION
             ticks cuda_finish = getticks();
             ticks diff = cuda_finish - cuda_start;
