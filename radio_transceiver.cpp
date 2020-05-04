@@ -99,6 +99,8 @@ ssize_t RadioTransceiver::send(
     #endif
     int status = MPI_Send(mpi_msg, mpi_msg_size, MPI_BYTE,
             0, 0, MPI_COMM_WORLD);
+    cerr << "[" << device_data->rank << ", " << device_data->id << "]: " 
+         << "sent " << size << " bytes" << endl;
 
 
 
@@ -146,6 +148,8 @@ ssize_t RadioTransceiver::send(
 }
 
 ssize_t RadioTransceiver::recv(char** data, const double timeout) {
+    cerr << "[" << device_data->rank << ", " << device_data->id 
+         << " ]: buffer size: " << device_data->buffer_size << endl;
     double sleep = timeout;
     double current_time = MPI_Wtime();
     while(sleep >= 0) {
@@ -162,11 +166,18 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
         Mail* head = (Mail*)(raw_mailbox + (device_data->_head)*mail_size);
         //Mail* tail = (Mail*)(raw_mailbox + (device_data->_tail)*mail_size);
         if(device_data->buffer_size > 0) { // messages available
+            cerr << "[" << device_data->rank << ", " << device_data->id 
+                 << "]: message is available" << endl;
             const double next_recv_time = head->send_time + latency;
             if(current_time < next_recv_time) {
                 // need to wait
+                cerr << "[" << device_data->rank << ", " << device_data->id 
+                    << "]: I need to wait until " << next_recv_time 
+                    << " but it is currently " << current_time << endl;
                 const double delay = next_recv_time - current_time;
                 if(delay > sleep) {
+                    cerr << "[" << device_data->rank << ", " << device_data->id 
+                        << "]: delay " << delay << " sleep " << sleep << endl;
                     break;
                 } else {
                     // sleep for the delay
@@ -177,10 +188,14 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
             // if I got here I can remove message
             const size_t next_head = (device_data->_head + 1) % max_buffer_size;
             if(head->interference) {
+                cerr << "[" << device_data->rank << ", " << device_data->id 
+                     << " ]: interference detected" << endl;
                 lock_guard<mutex> device_lock(device_mtx);
                 device_data->buffer_size -= head->size;
                 device_data->_head = next_head;
             } else {
+                cerr << "[" << device_data->rank << ", " << device_data->id 
+                     << " ]: received data" << endl;
                 const size_t data_size = head->size;
                 memcpy(m_rcvd, &head->data, head->size);
                 {
@@ -192,6 +207,8 @@ ssize_t RadioTransceiver::recv(char** data, const double timeout) {
                 return data_size;
             }
             sleep -= (MPI_Wtime() - current_time);
+            cerr << "[" << device_data->rank << ", " << device_data->id 
+                 << " ]: looping again-sleep: " << sleep << endl;
         }
     }
     return 0;
@@ -408,6 +425,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0, 3, MPI_COMM_WORLD);
             #endif
         }
+        cerr << "[" << rank << "]: "<< "notifying all transceivers" << endl;
         mailbox_flag->notify_all();
         // notify 
 

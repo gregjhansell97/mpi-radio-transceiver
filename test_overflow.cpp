@@ -14,7 +14,7 @@ using std::cerr;
 using std::endl;
 
 
-#define BUFFER_SIZE 16 // buffer gets to full messages dropped
+#define BUFFER_SIZE 8 // buffer gets to full messages dropped
 #define PACKET_SIZE 3 // dont send data past this size
 #define LATENCY 0.01 // 10 millisecond pause
 
@@ -67,21 +67,32 @@ int main(int argc, char** argv) {
     
     char* rcvd;
     if(rank == 0) {
+        cerr << "sending t0 data" << std::endl;
         for(char i = 0; i < BUFFER_SIZE; ++i) {
-            t0.send(&i, 1, 0);
+            cerr << "sent " << t0.send(&i, 1, 0) << 
+                " number of bytes (" << (int)(i) << ")" << endl;
         }
         char overflow = 'a';
-        t0.send(&overflow, 1, 0);
+        cerr << "sending t0 extra data " << t0.send(&overflow, 1, 0) << endl;
     }
     // must wait for rank 0 to finish (pile up the buffers)
     MPI_Barrier(MPI_COMM_WORLD); 
+    ssize_t size;
+    if(rank == 0) cerr << "all ready to start receiving" << endl;
     for(char i = 0; i < BUFFER_SIZE; ++i) {
         if(rank != 0) {
-            assert(t0.recv(&rcvd, 1) == 1);
+            size = t0.recv(&rcvd, 1); 
+            if(size != 1) {
+                cerr << "[" << (int)(i) << "]-t0-" << rank << ": " << size << endl;
+            }
+            assert(size == 1);//t0.recv(&rcvd, 1) == 1);
             assert(*rcvd == i);
         }
-        ssize_t s = t1.recv(&rcvd, 1);
-        assert(s == 1);
+        size = t1.recv(&rcvd, 1);
+        if(size != 1) {
+            cerr << "[" << (int)(i) << "]-t1-" << rank << ": " << size << endl;
+        }
+        assert(size == 1);
         assert(*rcvd == i);
     }
     assert(t0.recv(&rcvd, 0.5) == 0);
