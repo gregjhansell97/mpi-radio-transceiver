@@ -14,7 +14,7 @@ using std::cerr;
 using std::endl;
 
 
-#define LATENCY 0.01 // 10 millisecond pause
+#define LATENCY 0.001 // 10 millisecond pause
 
 int main(int argc, char** argv) {
     // Initialize MPI Environment
