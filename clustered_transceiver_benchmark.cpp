@@ -57,46 +57,47 @@ std::pair<double, double> generate_point(
 // All ith transceivers are in the same cluster as each other across ranks.
 // All of rank 0's clusters' trx[0] sends out a message
 void cluster_benchmark(
-    std::promise<double> && elapsed_time,
+    double& elapsed_time,
     size_t rank, // rank this cluser belongs to
     size_t cluster, // cluster this trx thread belongs to
     size_t i, // cluster's ith trx
     size_t index, // global trx index
-    RadioTransceiver* trx) { // trx in question
+    size_t total_trxs, // total trxs in this rank
+    RadioTransceiver& t) { // trx in question
     try {
+        std::cout << "rank " << rank << " cluster " << cluster << " trx " << i << endl;
         std::pair<double, double> loc;
-        auto& t = *trx;
         // setting params for trx on this thread's cluster
-        loc = generate_point(cluster, cluster, .4);
+        loc = generate_point(cluster, cluster, .2);
         t.device_data->x = loc.first;
         t.device_data->y = loc.second;
-        t.device_data->send_range = .3;
-        t.device_data->recv_range = .3;
+        t.device_data->send_range = .1;
+        t.device_data->recv_range = .1;
 
-        // repeatedly send messages of bytes to those in its cluster
-        // until the max buffer size is reached.
-        if (rank == 0 && i == 0) {
-            std::cout << "sending" << std::endl;
-            size_t msgs_sent;
-            for (msgs_sent = 0; msgs_sent < TRX_BUFFER_SIZE/sizeof(double);
-            ++msgs_sent) {
+        // wait for all threads across ranks to reach here
+        std::unique_lock<std::mutex> lck(m);
+        while (!ready) cv.wait(lck);
+        std::cout << "rank " << rank << std::endl;
+        // send a message to those in its cluster
+        if (rank == 0) {
+            if (i == 0) {
+                std::cout << "rank " << rank << cluster << " cluster sending" << std::endl;
                 const char* msg = std::to_string(MPI_Wtime()).c_str();
-                t.send(msg, sizeof(double), 0.0);
+                t.send(msg, sizeof(double), 0.1);
+                cout << "cluster " << cluster << " sent "<< endl;
             }
-            cout << "cluster sent " << msgs_sent << endl;
+            // other transceivers on rank0's clusters don't do anything
+            elapsed_time = -1.0; // no latencies, since no msg rcvd
         } else { // otherwise, wait to receive msgs from its rank0 cluster
             // need to a wait condition variable that starts as soon as rank0's clusters
             // send msg
-            std::this_thread::sleep_for(std::chrono::microseconds(1)); // subtract this off later
+            // std::this_thread::sleep_for(std::chrono::microseconds(1)); // subtract this off later
             char* raw_msg; // tmp holder for received message
-            size_t rcvd_msgs = 0; // keep track of cluster's total rcvd messages
-            while (rcvd_msgs != TRX_BUFFER_SIZE/sizeof(double)) {
-                if (t.recv(&raw_msg, 0.001) == 8) {
-                    rcvd_msgs++;
-                }
+            while (t.recv(&raw_msg, 10000) == 0) { // block until message received
+                // BLOCK
+                std::cout << "rank " << rank << " index " << index << " waiting" << endl;
             }
-            std::cout<< "index " << index << " " << " done" << endl;
-            elapsed_time.set_value(MPI_Wtime() - atof(raw_msg));
+            elapsed_time = MPI_Wtime() - atof(raw_msg);
         }
     }
     catch(std::exception& e)
@@ -196,7 +197,7 @@ int main(int argc, char** argv) {
         MPI_Finalize();
         return -1;
     }
-    std::vector<std::thread> th; // this rank's cluster's threads
+    std::thread th[num_clusters * num_trxs]; // this rank's cluster's threads
     std::promise<double> promises[num_clusters * num_trxs]; 
     std::future<double> th_elapsed_times[num_clusters * num_trxs]; // when trxs finish
     for (size_t i = 0; i < num_clusters * num_trxs; ++i) {
@@ -204,31 +205,43 @@ int main(int argc, char** argv) {
     }
 
     // max time it took for ith cluster to finish
-    double elapsed_times[num_clusters] = {0};
+    double latencies[num_clusters * num_trxs] = {0.0};
     for (size_t i = 0; i < num_clusters; ++i) {
         for (size_t j = 0; j < num_trxs; ++j) {
-            size_t index = i * j;
-            th.emplace_back(std::thread(
+            size_t index = i * num_trxs + j;
+            th[index] = std::thread(
                 cluster_benchmark,
-                std::move(promises[index]),
+                std::ref(latencies[index]), // for return of latencies
                 rank, // this rank
                 i, // which cluster this trx belongs to
                 j, // cluster i's jth trx
                 index,
-                &trxs[index] // the trx this thread is for
-            ));
+                num_clusters * num_trxs,
+                std::ref(trxs[index]) // the trx this thread is for
+            );
         }
+        MPI_Barrier(MPI_COMM_WORLD);
+        // finished setting up all threads, start execution
+        std::unique_lock<std::mutex> lck(m);
+        std::cout << "rank " << rank << " thread " << std::this_thread::get_id() << " done" << endl;
+        ready = true;
+        cv.notify_all();
     }
+
+    double cluster_latencies[num_clusters * num_trxs] = {0.0};
     for (size_t i = 0; i < num_clusters; ++i) {
         double max_elapsed_time = -1.0;
         for (size_t j = 0; j < num_trxs; ++j) {
-            th.at(i * j).join();
+            size_t index = i * num_trxs + j;
+            std::cout << "rank " << rank << " index " << index << " wait" << std::endl;
+            th[index].join();
+            std::cout << "rank " << rank << " index " << index << " done" << std::endl;
             double curr_time = th_elapsed_times[i*j].get();
             if (curr_time > max_elapsed_time) {
                 max_elapsed_time = curr_time;
             }
         }
-        elapsed_times[i] = max_elapsed_time;
+        cluster_latencies[i] = max_elapsed_time;
     }
 
     std::cout << "rank " << rank << " done" << endl;
@@ -244,7 +257,7 @@ int main(int argc, char** argv) {
     // send local end times to rank 0
     for (size_t i = 0; i < num_clusters; ++i) {
         MPI_Reduce(
-            &elapsed_times[i], // sent var cluster i's max elapsed time
+            &cluster_latencies[i], // sent var cluster i's max elapsed time
             &global_latencies[i], // global rcv var
             1,  // # of obj sent
             MPI_DOUBLE, // datatype sent
