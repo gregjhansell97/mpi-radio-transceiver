@@ -18,6 +18,8 @@ using std::thread;
 
 #define LATENCY 0 // ideal time delay between send and recv
 #define SAMPLES 100 // number of comm is sampled
+#define NUM_TRX 16384
+#define THREADS_PER_BLOCK 32
 
 static void flush_recvs(
         RadioTransceiver* trxs, size_t start, size_t end, bool* running) {
@@ -59,8 +61,8 @@ int main(int argc, char** argv) {
     }
 
     // take in arguments
-    const size_t num_trxs = atoi(argv[1]);
-    const size_t num_threads_per_block = atoi(argv[2]);
+    const size_t num_trxs = NUM_TRXS; //atoi(argv[1]);
+    const size_t num_threads_per_block = THREADS_PER_BLOCK; //atoi(argv[2]);
     if(rank == 0) {
         cout << "starting evaluate_cuda (num-trxs: " << num_trxs 
              << ", thread-per-block: " << num_threads_per_block << ")" << endl;
