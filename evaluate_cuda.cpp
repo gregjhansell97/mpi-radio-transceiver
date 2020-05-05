@@ -18,7 +18,7 @@ using std::thread;
 
 #define LATENCY 0 // ideal time delay between send and recv
 #define SAMPLES 100 // number of comm is sampled
-#define NUM_TRX 16384
+#define NUM_TRXS 16384
 #define THREADS_PER_BLOCK 32
 
 static void flush_recvs(
