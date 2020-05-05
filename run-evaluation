@@ -4,8 +4,8 @@
 # separatly copiling the cuda code into an object file
 g++ -c ./cuda_wrapper_laptop.cpp -std=c++11 -Wall
 
-#mpic++ ./evaluate_comm.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall -D TRX_COMM_EVALUATION_MODE -D TRX_LAPTOP_MODE
-#mpirun -n 10 ./run.exe
+mpic++ ./evaluate_comm.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall -D TRX_COMM_EVALUATION_MODE -D TRX_LAPTOP_MODE
+mpirun -n 10 ./run.exe
 
 mpic++ ./evaluate_cuda.cpp ./radio_transceiver.cpp ./cuda_wrapper_laptop.o -o ./run.exe -std=c++11 -Wall -D TRX_CUDA_EVALUATION_MODE -D TRX_LAPTOP_MODE
 mpirun -n 1 ./run.exe 4096 32

@@ -16,7 +16,7 @@ using std::endl;
 
 
 #define LATENCY 0 // ideal time delay between send and recv
-#define SAMPLES 100 // number of comm is sampled
+#define SAMPLES 250 // number of comm is sampled
 
 #define THREADS_PER_BLOCK 1 // cuda is not the conscern here
 
@@ -76,11 +76,16 @@ int main(int argc, char** argv) {
             const char* msg = "comm evaluation\0";
             t1.send(msg, 16, 0); 
 #ifdef TRX_COMM_EVALUATION_MODE
+            ticks start;
             MPI_Status _status;
-            ticks diff;
-            MPI_Recv(&diff, sizeof(ticks), MPI_BYTE, 
-                    0, 2, MPI_COMM_WORLD, &_status);
-            sum += diff;
+            MPI_Recv(&start, sizeof(ticks), MPI_BYTE,
+                    0, 1, MPI_COMM_WORLD, &_status);
+            for(int i = 0; i < num_ranks; ++i) {
+                ticks end;
+                MPI_Recv(&end, sizeof(ticks), MPI_BYTE, 
+                        i, 2, MPI_COMM_WORLD, &_status);
+                sum += (end - start); // sum difference
+            }
 #endif
         } else {
             char* msg;
@@ -98,7 +103,7 @@ int main(int argc, char** argv) {
 #ifdef TRX_COMM_EVALUATION_MODE
     if(rank == 0) {
         double average = 0;
-        average = ((double)(sum)/SAMPLES);
+        average = (((double)(sum))/(SAMPLES*num_ranks));
         // iterate through and grab info from rank 0
         cout << "average mpi time: " << average << endl;
     }

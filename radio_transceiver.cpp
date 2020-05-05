@@ -110,7 +110,7 @@ ssize_t RadioTransceiver::send(
 
 #ifdef TRX_COMM_EVALUATION_MODE
     status = MPI_Send((char*)(&t), sizeof(ticks), MPI_BYTE,
-            0, 1, trxs_comm);
+            0, 1, MPI_COMM_WORLD); // send this back to loop
 #endif
     double sleep = latency;
 
@@ -375,19 +375,6 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     dt_MPIMsg,
                     0,
                     trxs_comm);
-#ifdef TRX_COMM_EVALUATION_MODE
-            ticks t = getticks();
-            MPI_Status _status;
-            if(mpi_msg->size > 0) {
-                ticks send_time;
-                MPI_Recv(&send_time, sizeof(ticks), MPI_BYTE, 
-                        0, 1, trxs_comm, &_status);
-                ticks diff = t - send_time;
-                MPI_Send(
-                        (char*)&diff, sizeof(ticks), MPI_BYTE, 
-                        0, 2, MPI_COMM_WORLD); 
-            }
-#endif
         } else {
             // rest of group receives
             MPI_Bcast(
@@ -397,6 +384,13 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0,
                     trxs_comm);
         }
+#ifdef TRX_COMM_EVALUATION_MODE
+        // reached spot that handles message
+        if(mpi_msg->size > 0) { // dont acknowledge shut down msg
+            ticks t = getticks();
+            MPI_Send((char*)&t, sizeof(ticks), MPI_BYTE, 0, 2, MPI_COMM_WORLD);
+        }
+#endif
         if(mpi_msg->size == 0) {
             // indicates the process should exit
             // release cuda memory
