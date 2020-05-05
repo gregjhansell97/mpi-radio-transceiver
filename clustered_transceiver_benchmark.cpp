@@ -33,6 +33,9 @@ using std::cerr;
 using std::endl;
 
 #define _USE_MATH_DEFINES
+std::mutex m;
+std::condition_variable cv;
+bool ready = false;
 
 /**
  * Generates a random point within a circle centered at (x_center, y_center)
@@ -52,25 +55,54 @@ std::pair<double, double> generate_point(
 // Each transceiver is given a location located with radius .4 of location
 // (t_id, t_id), and has a send/recv distance of .8.
 // All ith transceivers are in the same cluster as each other across ranks.
-void create_clusters(std::promise<RadioTransceiver*> && prms,
-    size_t num_trxs, size_t num_threads_per_block,
-    double latency, MPI_File* send_file_ptr = nullptr,
-    MPI_File* recv_file_ptr = nullptr) {
-    auto trxs = RadioTransceiver::transceivers(
-        num_trxs, latency, num_threads_per_block,
-        send_file_ptr, recv_file_ptr
-    );
-    std::pair<double, double> loc;
-    for (size_t i = 0; i < num_trxs; ++i) {
-        auto& t = trxs[i];
-        // setting params for trx on cluster i
-        loc = generate_point(i, i, .4);
+// All of rank 0's clusters' trx[0] sends out a message
+void cluster_benchmark(
+    std::promise<double> && elapsed_time,
+    size_t rank, // rank this cluser belongs to
+    size_t cluster, // cluster this trx thread belongs to
+    size_t i, // cluster's ith trx
+    size_t index, // global trx index
+    RadioTransceiver* trx) { // trx in question
+    try {
+        std::pair<double, double> loc;
+        auto& t = *trx;
+        // setting params for trx on this thread's cluster
+        loc = generate_point(cluster, cluster, .4);
         t.device_data->x = loc.first;
         t.device_data->y = loc.second;
         t.device_data->send_range = .3;
         t.device_data->recv_range = .3;
+
+        // repeatedly send messages of bytes to those in its cluster
+        // until the max buffer size is reached.
+        if (rank == 0 && i == 0) {
+            std::cout << "sending" << std::endl;
+            size_t msgs_sent;
+            for (msgs_sent = 0; msgs_sent < TRX_BUFFER_SIZE/sizeof(double);
+            ++msgs_sent) {
+                const char* msg = std::to_string(MPI_Wtime()).c_str();
+                t.send(msg, sizeof(double), 0.0);
+            }
+            cout << "cluster sent " << msgs_sent << endl;
+        } else { // otherwise, wait to receive msgs from its rank0 cluster
+            // need to a wait condition variable that starts as soon as rank0's clusters
+            // send msg
+            std::this_thread::sleep_for(std::chrono::microseconds(1)); // subtract this off later
+            char* raw_msg; // tmp holder for received message
+            size_t rcvd_msgs = 0; // keep track of cluster's total rcvd messages
+            while (rcvd_msgs != TRX_BUFFER_SIZE/sizeof(double)) {
+                if (t.recv(&raw_msg, 0.001) == 8) {
+                    rcvd_msgs++;
+                }
+            }
+            std::cout<< "index " << index << " " << " done" << endl;
+            elapsed_time.set_value(MPI_Wtime() - atof(raw_msg));
+        }
     }
-    prms.set_value(trxs);
+    catch(std::exception& e)
+    {
+        std::cout << e.what() << std::endl;
+    }
 }
 
 int main(int argc, char** argv) {
@@ -124,7 +156,7 @@ int main(int argc, char** argv) {
     }
 
     // initialize the trxs depending on if file i/o is needed
-    if (argc == 5 && (file_io = atoi(argv[4]) == 0)) { // file i/o needed
+    if (argc == 6 && (file_io = atoi(argv[5]) == 0)) { // file i/o needed
         // set file name based on the current config
         std::string send_file_name = "send_logs_trxs=" + std::to_string(num_trxs) \
          + "_buff=" + std::to_string(max_buffer_size) + "_packet=" + \
@@ -153,104 +185,87 @@ int main(int argc, char** argv) {
         recv_file_ptr = nullptr;
     }
 
-    // create num_clusters clusters, 1 per each thread
-    std::vector<RadioTransceiver*> clusters;
-    std::thread th[num_clusters]; // keep track of the rank's threads
-    for (size_t i = 0; i < num_clusters; ++i) {
-        // grab this thread's cluster of trxs
-        std::promise<RadioTransceiver*> prms;
-        auto ftr_trxs = prms.get_future();
+    // create num_clusters clusters, 1 trx per each thread
+    // RadioTransceiver* clusters[num_clusters];
+    auto trxs = RadioTransceiver::transceivers(
+        num_clusters * num_trxs, latency, num_threads_per_block,
+        send_file_ptr, recv_file_ptr
+    );
+    if (trxs == nullptr) { // Unable to retrieve transceivers.
+        std::cerr << "Couldn't retrieve trxs" << std::endl;
+        MPI_Finalize();
+        return -1;
+    }
+    std::vector<std::thread> th; // this rank's cluster's threads
+    std::promise<double> promises[num_clusters * num_trxs]; 
+    std::future<double> th_elapsed_times[num_clusters * num_trxs]; // when trxs finish
+    for (size_t i = 0; i < num_clusters * num_trxs; ++i) {
+        th_elapsed_times[i] = promises[i].get_future();
+    }
 
-        th[i] = std::thread(&create_clusters, std::move(prms), num_trxs,
-        num_threads_per_block, latency, send_file_ptr, recv_file_ptr);
-        auto trxs = ftr_trxs.get();
-        if (trxs == nullptr) { // Unable to retrieve transceivers.
-            MPI_Finalize();
-            return 1;
+    // max time it took for ith cluster to finish
+    double elapsed_times[num_clusters] = {0};
+    for (size_t i = 0; i < num_clusters; ++i) {
+        for (size_t j = 0; j < num_trxs; ++j) {
+            size_t index = i * j;
+            th.emplace_back(std::thread(
+                cluster_benchmark,
+                std::move(promises[index]),
+                rank, // this rank
+                i, // which cluster this trx belongs to
+                j, // cluster i's jth trx
+                index,
+                &trxs[index] // the trx this thread is for
+            ));
         }
-        // std::thread::id curr_id = th[i].get_id
-        clusters.push_back(trxs);
     }
-
-    // Ensures all clusters of trxs in all ranks are ready before test starts.
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // // This clustering transceiver benchmark tests as follows:
-    // // - create X isolated clusters specified in the CLI args
-    // // - each cluster has N numbers of trxs (N = total # of trxs/X)
-    // // - 1 trxs/cluster transmits msgs accummulating to the max buffer size
-    // // - wait for how long it takes for all trxs to receive all the msgs
-    // // - reduces and spits out average latency time across clusters
-    // double global_start_time[num_trxs]; // used to calculate
-    // double global_end_time[num_trxs];   // latencies later
-    // double local_end_time[num_trxs] = {0.0}; // end time for each rank's clusters
-    // if (rank == 0) { // each cluster's rank0 trx sends out 1 msg
-    //     const char* msg = "Hey from rnk0";
-    //     // keep sending messages until trx buffers are maxed out
-    //     // max # of messages that can be sent is buffer_size/msg_size
-    //     for (size_t i = 0; i < num_trxs; ++i) {
-    //         auto& t = trxs[i];
-    //         for (size_t msgs_sent = 0; msgs_sent < max_buffer_size/14;
-    //         ++msgs_sent) {
-    //             t.send(msg, 14, 0.1);
-    //         }
-    //         cout << "Sent " << msg << " 14 bytes" << endl;
-    //         global_start_time[i] = MPI_Wtime(); // start time of cluster i
-    //     }
-    // } else { // all other ranks iterate through clusters
-    //     char* raw_msg; // tmp holder for rcvd msg
-    //     size_t rcvd_msgs[num_trxs] = {0}; // keep track of msgs rcvd/cluster i
-    //     size_t total_msgs_sent = max_buffer_size/14;
-    //     size_t local_rcvd_msgs = 0;
-    //     while (local_rcvd_msgs != total_msgs_sent * num_trxs) {
-    //         for (size_t i = 0; i < num_trxs; ++i) {
-    //             if (rcvd_msgs[i] != total_msgs_sent) {
-    //                 auto& t = trxs[i];
-    //                 if (t.recv(&raw_msg, 0.1) == 14) {
-    //                     cout << "rank" << rank << "-clus" << i << " rcvd " <<
-    //                     raw_msg << endl;
-    //                     rcvd_msgs[i]++;
-    //                     cout << ", " << rcvd_msgs[i] << " total" << endl;
-    //                     local_rcvd_msgs++;
-    //                     if (rcvd_msgs[i] == total_msgs_sent) {
-    //                         // record cluster's end time
-    //                         local_end_time[i] = MPI_Wtime();
-    //                         cout << "rank" << rank << "-clus" << i <<
-    //                         "finished" << endl;
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-    
-    // // send local end times to rank 0
-    // for (size_t i = 0; i < num_trxs; ++i) {
-    //     MPI_Reduce(
-    //         &local_end_time[i], // sent var
-    //         &global_end_time[i], // global rcv var
-    //         1,  // # of obj sent
-    //         MPI_DOUBLE, // datatype sent
-    //         MPI_MAX, // operation
-    //         0, // rank 0 collects data
-    //         MPI_COMM_WORLD
-    //     );
-    // }
-
-    // // calculate and record all elapsed times across clusters
-    // if (rank == 0) {
-    //     for (size_t i = 0; i < num_trxs; ++i) {
-    //         std::cout << "Cluster " << i << " took " <<
-    //         global_end_time[i] - global_start_time[i] <<
-    //         " s to receive all msgs" << endl;
-    //     }
-    // }
-
-    // Shuts down all transceivers in all clusters/threads
     for (size_t i = 0; i < num_clusters; ++i) {
-        RadioTransceiver::close_transceivers(clusters.at(i));
+        double max_elapsed_time = -1.0;
+        for (size_t j = 0; j < num_trxs; ++j) {
+            th.at(i * j).join();
+            double curr_time = th_elapsed_times[i*j].get();
+            if (curr_time > max_elapsed_time) {
+                max_elapsed_time = curr_time;
+            }
+        }
+        elapsed_times[i] = max_elapsed_time;
     }
 
+    std::cout << "rank " << rank << " done" << endl;
+    // wait for all ranks to finish before cleaning up threads
+    MPI_Barrier(MPI_COMM_WORLD);
+    std::cout << "ALL THREADS JOINED" << std::endl;
+    // This clustering transceiver benchmark tests as follows:
+    // - each cluster has N numbers of trxs (N = total # of trxs/X)
+    // - 1 trxs/cluster transmits msgs accummulating to the max buffer size
+    // - wait for how long it takes for all trxs to receive all the msgs
+    // - reduces and spits out average latency time across clusters
+    double global_latencies[num_clusters];   // latencies later
+    // send local end times to rank 0
+    for (size_t i = 0; i < num_clusters; ++i) {
+        MPI_Reduce(
+            &elapsed_times[i], // sent var cluster i's max elapsed time
+            &global_latencies[i], // global rcv var
+            1,  // # of obj sent
+            MPI_DOUBLE, // datatype sent
+            MPI_MAX, // operation
+            0, // rank 0 collects data
+            MPI_COMM_WORLD
+        );
+    }
+
+    // calculate and record all elapsed times across clusters
+    if (rank == 0) {
+        for (size_t i = 0; i < num_clusters; ++i) {
+            std::cout << "Cluster " << i << " took " <<
+            global_latencies[i]<<
+            " s to receive all msgs" << endl;
+        }
+    }
+
+    // Shuts down all transceivers in all clusters/threads and join threads
+    RadioTransceiver::close_transceivers(trxs);
+    // shut down all threads
     // Ensure fps are closed if not nullptr
     if (send_file_ptr != nullptr) {
         MPI_File_close(
