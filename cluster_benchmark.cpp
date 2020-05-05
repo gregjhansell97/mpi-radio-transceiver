@@ -46,9 +46,8 @@ static void spin_cluster(
     //-------------------------------------------------------------------------
     //TIME STARTS HERE
     //RadioTransceiver* head = q->front();
-    const double start = MPI_Wtime();
+    //const double start = MPI_Wtime();
     // every loop around send a new message
-    if(rank == 0) q->front()->send("front", 5, 0);
     while(q->size() > 1) { // one remaining is the sender
         t = q->front();
         s = t->recv(&msg, 0);
@@ -57,7 +56,7 @@ static void spin_cluster(
             q->push(t); // add back to end
         }
     }
-    *latency = (MPI_Wtime() - start);
+    //*latency = (MPI_Wtime() - start);
     //-------------------------------------------------------------------------
 }
 
@@ -130,7 +129,11 @@ int main(int argc, char** argv) {
     MPI_Barrier(MPI_COMM_WORLD);
     sending = true;
     start.notify_all();
-
+    if(rank == 0) {
+        for(int i = 0; i < NUM_CLUSTERS; ++i) {
+            qs[i].front()->send("front", 5, 0);
+        }
+    }
 
     for(auto& t : threads) {
         t.join();

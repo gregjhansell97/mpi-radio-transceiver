@@ -23,9 +23,10 @@ using std::unique_lock;
 using std::vector; 
 
 
-#define NUM_TRXS 16384
-#define LATENCY 0 // ideal time delay between send and recv
-#define NUM_THREADS_PER_BLOCK 32
+#define FILE_IO false // true | false
+#define NUM_TRXS 8192 // 8192 16384, 32768, 65535
+#define LATENCY 0 
+#define NUM_THREADS_PER_BLOCK 32 //32 64 128 256 512 1024
 
 int main(int argc, char** argv) {
     if(!MPI_WTIME_IS_GLOBAL) {
@@ -52,12 +53,34 @@ int main(int argc, char** argv) {
     if(rank == 0) {
         cout << "starting benchmark (num-trxs per rank: " << NUM_TRXS
              << ", thread-per-block: " << NUM_THREADS_PER_BLOCK 
-             << ", ranks: " << num_ranks 
+             << ", ranks: " << num_ranks << ", file-io: " << FILE_IO
              << ")" << endl;
     }
 
-    auto trxs = RadioTransceiver::transceivers(
-            NUM_TRXS, LATENCY, NUM_THREADS_PER_BLOCK);
+    MPI_File send_file;
+    MPI_File recv_file;
+
+    RadioTransceiver* trxs;
+    if(FILE_IO) {
+        MPI_File_open(
+                MPI_COMM_WORLD,
+                "send_log.ord", 
+                MPI_MODE_RDWR | MPI_MODE_CREATE | MPI_MODE_DELETE_ON_CLOSE,
+                MPI_INFO_NULL,
+                &send_file); 
+        MPI_File_open(
+                MPI_COMM_WORLD,
+                "recv_log.ord", 
+                MPI_MODE_RDWR | MPI_MODE_CREATE | MPI_MODE_DELETE_ON_CLOSE,
+                MPI_INFO_NULL,
+                &recv_file); 
+        trxs = RadioTransceiver::transceivers(
+                NUM_TRXS, LATENCY, NUM_THREADS_PER_BLOCK, 
+                &send_file, &recv_file);
+    } else {
+        trxs = RadioTransceiver::transceivers(
+                NUM_TRXS, LATENCY, NUM_THREADS_PER_BLOCK);
+    }
 
     if(trxs == nullptr) {
         // could not get transceivers
@@ -106,6 +129,10 @@ int main(int argc, char** argv) {
     if(rank == 0) {
         const double average_latency = total_latency/num_ranks;
         cout << "average: " << average_latency << endl;
+    }
+    if(FILE_IO) {
+        MPI_File_close(&send_file);
+        MPI_File_close(&recv_file);
     }
 
     if(rank == 0) cout << "done with benchmark" << endl;

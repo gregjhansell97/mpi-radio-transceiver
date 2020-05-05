@@ -370,7 +370,6 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0,
                     trxs_comm,
                     &status);
-            cerr << mpi_msg->sender_rank << ": " << mpi_msg->send_x << endl;
             // send to rest of group
             MPI_Bcast(
                     mpi_msg,
