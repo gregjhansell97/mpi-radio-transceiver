@@ -91,6 +91,8 @@ public:
 
 private:
     char m_rcvd[TRX_PACKET_SIZE];
+
+    static std::mutex send_mtx;
     
     static int num_ranks;
     static int rank;

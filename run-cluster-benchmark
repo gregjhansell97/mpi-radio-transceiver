@@ -1,0 +1,12 @@
+
+
+# separatly copiling the cuda code into an object file
+g++ -c ./cuda_wrapper_laptop.cpp -std=c++11
+
+# linking the object file to the mpi compilation
+mpic++ ./cluster_benchmark.cpp ./radio_transceiver.cpp cuda_wrapper_laptop.o -o ./run.exe -std=c++11
+
+mpirun -n 2 ./run.exe
+
+rm ./run.exe
+rm ./cuda_wrapper_laptop.o

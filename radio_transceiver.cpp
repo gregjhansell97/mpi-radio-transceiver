@@ -42,6 +42,7 @@ double RadioTransceiver::latency = 0;
 int RadioTransceiver::num_ranks = 0; 
 int RadioTransceiver::rank = 0; 
 std::mutex RadioTransceiver::device_mtx;
+std::mutex RadioTransceiver::send_mtx;
 
 condition_variable* RadioTransceiver::mailbox_flag;
 thread* RadioTransceiver::mpi_listener_thread = nullptr;
@@ -83,8 +84,12 @@ ssize_t RadioTransceiver::send(
 #ifdef TRX_COMM_EVALUATION_MODE
     ticks t = getticks();
 #endif
-    int status = MPI_Send(&mpi_msg, 1, dt_MPIMsg,
+    int status;
+    {
+        std::lock_guard<std::mutex> send_lock(send_mtx); 
+        MPI_Send(&mpi_msg, 1, dt_MPIMsg,
             0, 0, trxs_comm);
+    }
     if(status != 0) {
         cerr << "Send failed, MPI failed to send message to leader " 
              << "status code: " << status << endl;
