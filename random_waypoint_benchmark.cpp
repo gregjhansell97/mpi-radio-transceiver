@@ -52,7 +52,7 @@ using std::endl;
 #define SPEED_MAX 20
 #define SPEED_MIN 10
 #define LATENCY_PRECISION 100000 // decimal places to measure latency
-#define NUM_THREADS_PER_BLOCK 1 // for CUDA, later
+#define NUM_THREADS_PER_BLOCK 2 // for CUDA, later
 
 // Singular component making up a trx's path.
 typedef struct Point {
@@ -245,7 +245,7 @@ int main(int argc, char** argv) {
                 auto& t = trxs[i];
                 char* raw_msg; // rcv 1msg/trxs
                 // wait for msg
-                size_t bytes = t.recv(&raw_msg, 0);
+                size_t bytes = t.recv(&raw_msg, 0.1);
                 if (bytes == 13) { // you've got mail!
                     // grab time immediately after recv unblocks
                     // individual times needed for median calcs
@@ -297,6 +297,7 @@ int main(int argc, char** argv) {
     // wait for all latencies to be written
     MPI_Barrier(MPI_COMM_WORLD);
 
+    std::cout << "done" << std::endl;
     // METRICS
     // - average, min, and max latencies
     // know from msg counts size of incoming #s from each rank
