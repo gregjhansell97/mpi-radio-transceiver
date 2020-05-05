@@ -84,7 +84,7 @@ ssize_t RadioTransceiver::send(
 #ifdef TRX_COMM_EVALUATION_MODE
     ticks t = getticks();
 #endif
-    int status;
+    int status = 0;
     {
         std::lock_guard<std::mutex> send_lock(send_mtx); 
         MPI_Send(&mpi_msg, 1, dt_MPIMsg,
@@ -389,6 +389,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0,
                     trxs_comm);
         }
+        //cerr << msg->sender_rank << endl; 
 #ifdef TRX_COMM_EVALUATION_MODE
         // reached spot that handles message
         if(mpi_msg->size > 0) { // dont acknowledge shut down msg

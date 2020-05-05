@@ -135,9 +135,11 @@ int main(int argc, char** argv) {
         t.join();
     }
 
+    cerr << "joined threads" << endl;
 
     RadioTransceiver::close_transceivers(trxs);
     
+    cerr << "closed transceivers" << endl;
     double sum = 0; 
     for(size_t c = 0; c < NUM_CLUSTERS; ++c) {
         sum += latencies[c];
