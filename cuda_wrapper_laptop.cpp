@@ -76,7 +76,6 @@ void deliver_mpi_msg_kernel(
         // not empty and inteference 
         if(d->buffer_size > 0
                 && mpi_msg->send_time - last->send_time < latency) {
-            cerr << "I SHOULD NOT BE HERE" << endl;
             // grow leading msg pointer to absorb other msg
             last->size += mpi_msg->size;
             // set end pointer to have interference

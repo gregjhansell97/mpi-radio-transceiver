@@ -39,12 +39,13 @@ static void spin_cluster(
     mutex mtx;
     unique_lock<mutex> lk(mtx);
     on_start->wait(lk, [sending]{ return *sending; });
+    if(rank == 0) cerr << "STARTING" << endl; 
     char* msg;
     RadioTransceiver* t;
     ssize_t s;
     //-------------------------------------------------------------------------
     //TIME STARTS HERE
-    RadioTransceiver* head = q->front();
+    //RadioTransceiver* head = q->front();
     const double start = MPI_Wtime();
     // every loop around send a new message
     if(rank == 0) q->front()->send("front", 5, 0);

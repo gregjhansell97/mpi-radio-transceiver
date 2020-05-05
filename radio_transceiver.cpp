@@ -85,11 +85,8 @@ ssize_t RadioTransceiver::send(
     ticks t = getticks();
 #endif
     int status = 0;
-    {
-        std::lock_guard<std::mutex> send_lock(send_mtx); 
-        MPI_Send(&mpi_msg, 1, dt_MPIMsg,
-            0, 0, trxs_comm);
-    }
+    status = MPI_Send(&mpi_msg, 1, dt_MPIMsg,
+        0, 0, trxs_comm);
     if(status != 0) {
         cerr << "Send failed, MPI failed to send message to leader " 
              << "status code: " << status << endl;
@@ -373,6 +370,7 @@ void RadioTransceiver::mpi_listener(RadioTransceiver* trxs) {
                     0,
                     trxs_comm,
                     &status);
+            cerr << mpi_msg->sender_rank << ": " << mpi_msg->send_x << endl;
             // send to rest of group
             MPI_Bcast(
                     mpi_msg,
