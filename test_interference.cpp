@@ -66,6 +66,7 @@ int main(int argc, char** argv) {
     const char* msg = "interference\0";
     const size_t num_sends = 3; 
     for(size_t i = 0; i < num_sends; ++i) {
+        cerr << "i" << endl;
         MPI_Barrier(MPI_COMM_WORLD);
         msg = "inteference\0";
         t0.send(msg, 12, 0);

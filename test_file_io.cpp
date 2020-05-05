@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
     }
     int num_ranks;
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
-    if(rank == 0) cout << "starting test_interference" << endl;
+    if(rank == 0) cout << "starting test_file_io" << endl;
 
     // open mpi files
     MPI_File send_file;
